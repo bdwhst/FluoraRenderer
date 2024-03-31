@@ -184,20 +184,7 @@ __device__ glm::vec3 util_sample_D_wi(const glm::vec3& wi, const glm::vec2& rand
 	return wm;
 }
 
-__device__ inline glm::vec3 util_sample_ggx_vndf(const glm::vec3& wo, const glm::vec2& rand, float alpha_x, float alpha_y)
-{
-	glm::vec3 v = glm::normalize(glm::vec3(wo.x * alpha_x, wo.y * alpha_y, wo.z));
-	glm::vec3 t1 = v.z > 1 - 1e-9 ? glm::vec3(1, 0, 0) : glm::cross(v, glm::vec3(0, 0, 1));
-	glm::vec3 t2 = glm::cross(t1, v);
-	float a = 1 / (1 + v.z);
-	float r = sqrt(rand.x);
-	float phi = rand.y < a ? rand.y / a * PI : ((rand.y - a) / (1.0 - a) + 1) * PI;
-	float p1 = r * cos(phi);
-	float p2 = r * sin(phi);
-	p2 *= rand.y < a ? 1.0 : v.z;
-	glm::vec3 h = p1 * t1 + p2 * t2 + sqrt(max(0.0f, 1.0f - p1 * p1 - p2 * p2)) * v;
-	return glm::normalize(glm::vec3(h.x * alpha_x, h.y * alpha_y, max(0.0f, h.z)));
-}
+
 
 __device__ inline float util_pow_5(float x)
 {
@@ -279,7 +266,7 @@ __device__ glm::vec3 bxdf_asymMicrofacet_sample(glm::vec3 wo, glm::vec3& through
 	int i = 0;
 	thrust::uniform_real_distribution<float> u01(0, 1);
 
-	while (i <= order)
+	while (i < order)
 	{	
 		float U = u01(rng);
 		float sigmaIn = max(z > mat.zs ? util_GGX_extinction_coeff(w, mat.alphaXA, mat.alphaYA) : util_GGX_extinction_coeff(w, mat.alphaXB, mat.alphaYB),0.0f);
@@ -320,7 +307,7 @@ __device__ glm::vec3 bxdf_asymMicrofacet_eval(const glm::vec3& wo, const glm::ve
 	int i = 0;
 	thrust::default_random_engine rng = makeSeededRandomEngine(rndSeed.x, rndSeed.y, rndSeed.z);
 	thrust::uniform_real_distribution<float> u01(0, 1);
-	while (i <= order)
+	while (i < order)
 	{
 		float U = u01(rng);
 		float sigmaIn = z > mat.zs ? util_GGX_extinction_coeff(w, mat.alphaXA, mat.alphaYA) : util_GGX_extinction_coeff(w, mat.alphaXB, mat.alphaYB);

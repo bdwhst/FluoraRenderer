@@ -118,10 +118,10 @@ __device__ inline float util_math_luminance(glm::vec3 col)
 }
 
 //https://jcgt.org/published/0007/04/01/paper.pdf
-__device__ inline glm::vec3 util_math_sample_ggx_vndf(const glm::vec3& wo, float roughness, const glm::vec2& rand)
+__device__ inline glm::vec3 util_sample_ggx_vndf(const glm::vec3& wo, const glm::vec2& rand, float alpha_x, float alpha_y)
 {
-	glm::vec3 v = glm::normalize(glm::vec3(wo.x * roughness, wo.y * roughness, wo.z));
-	glm::vec3 t1 = v.z > 1 - 1e-9 ? glm::vec3(1, 0, 0) : glm::cross(v, glm::vec3(0, 0, 1));
+	glm::vec3 v = glm::normalize(glm::vec3(wo.x * alpha_x, wo.y * alpha_y, wo.z));
+	glm::vec3 t1 = v.z > 1 - 1e-6 ? glm::vec3(1, 0, 0) : glm::normalize(glm::cross(v, glm::vec3(0, 0, 1)));
 	glm::vec3 t2 = glm::cross(t1, v);
 	float a = 1 / (1 + v.z);
 	float r = sqrt(rand.x);
@@ -130,7 +130,7 @@ __device__ inline glm::vec3 util_math_sample_ggx_vndf(const glm::vec3& wo, float
 	float p2 = r * sin(phi);
 	p2 *= rand.y < a ? 1.0 : v.z;
 	glm::vec3 h = p1 * t1 + p2 * t2 + sqrt(max(0.0f, 1.0f - p1 * p1 - p2 * p2)) * v;
-	return glm::normalize(glm::vec3(h.x * roughness, h.y * roughness, max(0.0f, h.z)));
+	return glm::normalize(glm::vec3(h.x * alpha_x, h.y * alpha_y, h.z));
 }
 
 __device__ inline float util_math_smith_ggx_masking(const glm::vec3& wo, float a2)
@@ -256,7 +256,7 @@ __device__ inline float bxdf_microfacet_pdf(const glm::vec3& wo, const glm::vec3
 
 __device__ inline glm::vec3 bxdf_microfacet_sample(const glm::vec2& random, const glm::vec3& wo, float roughness)
 {
-	glm::vec3 h = util_math_sample_ggx_vndf(wo, roughness, random);//importance sample
+	glm::vec3 h = util_sample_ggx_vndf(wo, random, roughness, roughness);//importance sample
 	glm::vec3 wi = glm::reflect(-wo, h);
 	return wi;
 }

@@ -92,11 +92,11 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
 __global__ void initFunctionPointers(Material* dev_materials, int size)
 {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-	if (idx >= size) return;
-	if (dev_materials[idx].asymmicrofacet.type == conductor)
-		dev_materials[idx].asymmicrofacet.fSample = util_conductor_samplePhaseFunction;
-	else if(dev_materials[idx].asymmicrofacet.type == dielectric)
-		dev_materials[idx].asymmicrofacet.fSample = util_dielectric_samplePhaseFunction;
+	if (idx >= size || dev_materials[idx].type != asymMicrofacet) return;
+	//if (dev_materials[idx].asymmicrofacet.type == conductor)
+	//	dev_materials[idx].asymmicrofacet.fSample = util_conductor_samplePhaseFunction;
+	//else if(dev_materials[idx].asymmicrofacet.type == dielectric)
+	//	dev_materials[idx].asymmicrofacet.fSample = util_dielectric_samplePhaseFunction;
 	//dev_materials[idx].asymmicrofacet.fSample = util_conductor_samplePhaseFunction;
 }
 
@@ -807,7 +807,10 @@ __global__ void scatter_on_intersection(
 		}
 		else if (material.type == MaterialType::asymMicrofacet)
 		{
-			bxdf = bxdf_asymMicrofacet_sample_f(wo, &wi, rng, &pdf, material.asymmicrofacet, NUM_MULTI_SCATTER_BOUNCE);
+			if(material.asymmicrofacet.type == conductor)
+				bxdf = bxdf_asymConductor_sample_f(wo, &wi, rng, &pdf, material.asymmicrofacet, NUM_MULTI_SCATTER_BOUNCE);
+			else
+				bxdf = bxdf_asymDielectric_sample_f(wo, &wi, rng, &pdf, material.asymmicrofacet, NUM_MULTI_SCATTER_BOUNCE);
 			cosWi = 1.0f;
 		}
 		else//diffuse

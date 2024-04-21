@@ -1,11 +1,9 @@
-CUDA Path Tracer
+Fluora
 ================
 
-**University of Pennsylvania, CIS 565: GPU Programming and Architecture, Project 3**
+***Fluora*** is a physically based path tracer written in CUDA and C++, based on UPenn's **CIS-5650** Project 3. It's a playground for me to test out new graphics algorithms and get to know more about GPU programming. I will try to integrate as many graphics algorithms as possible with it.
 
-* Han Yang
-  *  [LinkedIn](https://www.linkedin.com/in/han-yang-0031231a3/), [personal website](https://bdwhst.wixsite.com/portfolio), etc.
-* Tested on: Windows 11, i9-12900HX @ 2.30GHz 16GB, RTX4080 laptop 12GB
+Currently ***Fluora*** only supports unidirectional path tracing evaluation with multiple importance sampling, but I'm currently working it on to support volumes and bidirectional method.
 
 ## Usage
 

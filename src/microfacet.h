@@ -18,7 +18,7 @@ __device__ float util_alpha_i(const glm::vec3& wi, float alpha_x, float alpha_y)
 
 __device__ inline float util_sign(float x)
 {
-	return x > 0 ? 1 : -1;
+	return x == 0 ? 0 : (x > 0 ? 1 : -1);
 }
 
 __device__ float util_GGX_P22(float slope_x, float slope_y, float alpha_x, float alpha_y)
@@ -43,17 +43,17 @@ __device__ float util_D(const glm::vec3& wm, float alpha_x, float alpha_y){
 
 __device__ float util_GGX_lambda(const glm::vec3& wi, float alpha_x, float alpha_y)
 {
-	if (wi.z > 0.9999f)
-		return 0.0f;
-	if (wi.z < -0.9999f)
+	if (wi.z > 0.999999f)
+		return 1e-7f;
+	if (wi.z < -0.999999f)
 		return -1.0f;
 
 	// a
 	const float theta_i = acosf(wi.z);
-	const float a = 1.0f / tanf(theta_i) / util_alpha_i(wi, alpha_x, alpha_y);
+	const float a = tanf(theta_i) * util_alpha_i(wi, alpha_x, alpha_y);
 
 	// value
-	const float value = 0.5f * (-1.0f + util_sign(a) * sqrtf(1 + 1 / (a * a)));
+	const float value = 0.5f * (-1.0f + util_sign(a) * sqrtf(max(1 + (a * a),0.0f)));
 
 	return value;
 }
@@ -153,33 +153,36 @@ __device__ float util_fresnel(const glm::vec3& wi, const glm::vec3& wm, const fl
 	return F;
 }
 
+__device__  glm::vec3 util_refract(const glm::vec3& wi, const glm::vec3& wm, const float eta)
+{
+	const float cos_theta_i = dot(wi, wm);
+	const float cos_theta_t2 = 1.0f - (1.0f - cos_theta_i * cos_theta_i) / (eta * eta);
+	const float cos_theta_t = sqrtf(max(0.0f, cos_theta_t2));
 
-__device__ glm::vec3 util_dielectric_samplePhaseFunctionFromSide(const glm::vec3& wi, const bool wi_outside, bool& wo_outside, glm::vec3 random, glm::vec3& throughput, float alpha_x, float alpha_y, glm::vec3 albedo)
+	return wm * (cos_theta_i / eta - cos_theta_t) - wi / eta;
+}
+
+
+__device__ glm::vec3 util_dielectric_samplePhaseFunctionFromSide(const glm::vec3& wi, const bool wi_outside, bool& wo_outside, glm::vec3 random, glm::vec3& throughput, float alpha_x, float alpha_y, glm::vec3 albedo, float m_eta)
 {
 	const float U1 = random.x;
 	const float U2 = random.y;
-	const float m_eta = 2.0;//TODO: make this a input
 	const float etaI = wi_outside ? 1.0f : m_eta;
 	const float etaT = wi_outside ? m_eta : 1.0f;
+	glm::vec3 wm = wi.z > 0 ? util_sample_ggx_vndf(wi, glm::vec2(random.x, random.y), alpha_x, alpha_y) : -util_sample_ggx_vndf(-wi, glm::vec2(random.x, random.y), alpha_x, alpha_y);
 
-	glm::vec3 wm = wi_outside ? (util_sample_ggx_vndf(wi, glm::vec2(random.x, random.y), alpha_x, alpha_y)) :
-		(-util_sample_ggx_vndf(-wi, glm::vec2(random.x, random.y), alpha_x, alpha_y));
-
-	const float F = util_fresnel(wi, wm, etaT / etaI);;
+	const float F = util_fresnel(wi, wm, etaT / etaI);
 
 	if (random.z < F)
 	{
 		const glm::vec3 wo = -wi + 2.0f * wm * dot(wi, wm); // reflect
-		return wo;
+		return glm::normalize(wo);
 	}
 	else
 	{
 		wo_outside = !wi_outside;
-		const glm::vec3 wo = glm::refract(wi, wm, etaI / etaT);
-
-		/*glm::vec3 n = wi.z > 0 ? glm::vec3(0, 0, 1) : glm::vec3(0, 0, -1);
-		glm::vec3 refractedRay;
-		if (!util_geomerty_refract(wi, n, etaI / etaT, &refractedRay)) return glm::vec3(0, 0, 1);*/
+		const glm::vec3 wo = util_refract(wi, wm, etaT / etaI);
+		if (glm::dot(wo, wi) > 0) return glm::vec3(0, 0, 1);
 
 		return glm::normalize(wo);
 	}
@@ -224,6 +227,11 @@ __device__ glm::vec3 bxdf_asymConductor_sample(glm::vec3 wo, glm::vec3& throughp
 		if ((z != z) || (w.z != w.z))
 			return glm::vec3(0.0f, 0.0f, 1.0f);
 		i++;
+	}
+	if (z < 0)
+	{
+		throughput = glm::vec3(0.0);
+		return glm::vec3(0, 0, 1);
 	}
 	return w;
 }
@@ -285,12 +293,15 @@ __device__ float util_flip_z(float z)
 
 __device__ glm::vec3 bxdf_asymDielectric_sample(glm::vec3 wo, glm::vec3& throughput, thrust::default_random_engine& rng, const asymMicrofacetInfo& mat, int order)
 {
+	constexpr float eta = 1.5f;
 	float z = 0;
 	glm::vec3 w = glm::normalize(-wo);
 	int i = 0;
 	thrust::uniform_real_distribution<float> u01(0, 1);
 	bool outside = wo.z > 0;
 	float zs = outside ? mat.zs : util_flip_z(mat.zs);
+	bool flipped = !outside;
+	if (!outside) w = -w;
 
 	while (i < order)
 	{
@@ -301,7 +312,7 @@ __device__ glm::vec3 bxdf_asymDielectric_sample(glm::vec3 wo, glm::vec3& through
 		float alphaYB = outside ? mat.alphaYB : mat.alphaYA;
 		float sigmaIn = z > zs ? util_GGX_extinction_coeff(w, alphaXA, alphaYA) : util_GGX_extinction_coeff(w, alphaXB, alphaYB);
 		float sigmaOut = z > zs ? util_GGX_extinction_coeff(w, alphaXB, alphaYB) : util_GGX_extinction_coeff(w, alphaXA, alphaYA);
-		float deltaZ = w.z / glm::length(w) * (-log(U) / sigmaIn);
+		float deltaZ = w.z * (-log(U) / sigmaIn);
 		if (z < zs != z + deltaZ < zs)
 		{
 			deltaZ = (zs - z) + (deltaZ - (zs - z)) * sigmaIn / sigmaOut;
@@ -312,11 +323,11 @@ __device__ glm::vec3 bxdf_asymDielectric_sample(glm::vec3 wo, glm::vec3& through
 		bool n_outside = outside;
 		if (z > zs)
 		{
-			w = util_dielectric_samplePhaseFunctionFromSide(-w, outside, n_outside, rand3, throughput, alphaXA, alphaYA, mat.albedo);
+			w = util_dielectric_samplePhaseFunctionFromSide(-w, outside, n_outside, rand3, throughput, alphaXA, alphaYA, mat.albedo, eta);
 		}
 		else
 		{
-			w = util_dielectric_samplePhaseFunctionFromSide(-w, outside, n_outside, rand3, throughput, alphaXB, alphaYB, mat.albedo);
+			w = util_dielectric_samplePhaseFunctionFromSide(-w, outside, n_outside, rand3, throughput, alphaXB, alphaYB, mat.albedo, eta);
 		}
 		if ((z != z) || (w.z != w.z))
 			return glm::vec3(0.0f, 0.0f, 1.0f);
@@ -326,10 +337,22 @@ __device__ glm::vec3 bxdf_asymDielectric_sample(glm::vec3 wo, glm::vec3& through
 			zs = util_flip_z(zs);
 			w = -w;
 			outside = !outside;
+			flipped = !flipped;
 		}
 		i++;
 	}
-	return wo.z > 0 == outside ? w : -w;
+	if (z < 0)
+	{
+		throughput = glm::vec3(0.0);
+		return glm::vec3(0, 0, 1);
+	}
+	if (flipped) w = -w;
+	if (w.z * wo.z < 0)
+	{
+		float etap = wo.z > 0 ? 1 / eta : eta;
+		throughput *= (etap * etap);
+	}
+	return w;
 }
 
 __device__ inline glm::vec3 bxdf_asymDielectric_sample_f(const glm::vec3& wo, glm::vec3* wi, thrust::default_random_engine& rng, float* pdf, const asymMicrofacetInfo& mat, int order)

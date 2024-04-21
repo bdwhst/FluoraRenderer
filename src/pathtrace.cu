@@ -822,7 +822,6 @@ __global__ void scatter_on_intersection(
 				materialColor.x = color.x;
 				materialColor.y = color.y;
 				materialColor.z = color.z;
-				
 			}
 			
 			if (color.w <= ALPHA_CUTOFF)

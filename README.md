@@ -19,6 +19,11 @@ Command line arguments: `.\cis565_path_tracer.exe scenefile.txt`
 | :------------------------------------: |
 |         ![](./img/chess0.png)          |
 
+| [SIGGRAPH-2023 Microfacet theory for non-uniform heightfields: Asymmetrically Blend of Microfacet NDF (Conductor And Dielectric)](https://research.nvidia.com/labs/rtr/microfacet-theory-non-uniform-heightfields/) |
+| :----------------------------------------------------------: |
+|                ![](./img/asym_conductor.png)                 |
+|                ![](./img/asym_dielectric.png)                |
+
 
 
 | Large `wavefront-obj` scene load and render (with alpha cutoff) (1920*1080 2000spp): |

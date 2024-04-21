@@ -1,9 +1,9 @@
 Fluora
 ================
 
-***Fluora*** is a physically based path tracer written in CUDA and C++, based on UPenn's **CIS-5650** Project 3. It's a playground for me to test out new graphics algorithms and get to know more about GPU programming. I will try to integrate as many graphics algorithms as possible inside it.
+***Fluora*** is a path tracer built on CUDA and C++, originating from UPenn's CIS-5650 Project 3. It serves as a platform for experimenting with new graphics algorithms and enhancing my GPU programming skills. My goal is to incorporate a broad range of graphics algorithms into Fluora.
 
-Currently ***Fluora*** only supports unidirectional path tracing evaluation with multiple importance sampling, but I'm currently working on it to support volumes and bidirectional method.
+At present, ***Fluora*** supports unidirectional path tracing with multiple importance sampling. I am actively developing it to include volume rendering and bidirectional tracing techniques.
 
 ## Usage
 

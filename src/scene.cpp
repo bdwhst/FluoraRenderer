@@ -14,6 +14,8 @@
 #include <queue>
 #include <numeric>
 
+#include "memoryUtils.h"
+#include "materials.h"
 #include "scene.h"
 
 Scene::Scene(string filename) {
@@ -70,11 +72,11 @@ namespace std {
 
 }
 
-void Scene::LoadAllTextures()
+void Scene::LoadAllTexturesToGPU()
 {
     for (auto& p : LoadTextureFromFileJobs)
     {
-        cudaTextureObject_t* texObj = p.second == -1 ? &skyboxTextureObj : &materials[p.second].baseColorMap;
+        cudaTextureObject_t* texObj = &skyboxTextureObj;
         if (!strToTextureObj.count(p.first))
         {
             loadTextureFromFile(p.first, texObj, p.second != -1);
@@ -85,7 +87,7 @@ void Scene::LoadAllTextures()
             *texObj = strToTextureObj[p.first];
         }
     }
-
+    /*
     for (auto& p : LoadTextureFromMemoryJobs)
     {
         Material& mat = materials[p.matIndex];
@@ -104,19 +106,47 @@ void Scene::LoadAllTextures()
         }
         LoadTextureFromMemory(p.buffer, p.width, p.height, p.bits, p.component, texObj);
         delete[] p.buffer;
+    }*/
+}
+
+void Scene::LoadAllMaterialsToGPU(Allocator alloc)
+{
+    for (auto& job : LoadMaterialJobs)
+    {
+        if (job.type == "dielectric")
+        {
+            if (job.params.get_string("eta") != std::string())
+            {
+                Spectrum eta = spec::get_named_spectrum(job.params.get_string("eta"));
+                job.params.insert_spectrum("eta", eta);
+            }
+            else if (job.params.get_vec3("eta") != glm::vec3(0.0f))
+            {
+                glm::vec3 eta = job.params.get_vec3("eta");
+                job.params.insert_spectrum("eta", alloc.new_object<RGBUnboundedSpectrum>(*RGBColorSpace::ACES2065_1, eta));
+            }
+            else if (job.params.get_float("eta") != 0.0f)
+            {
+                float eta = job.params.get_float("eta");
+                job.params.insert_spectrum("eta", alloc.new_object<ConstantSpectrum>(eta));
+            }
+        }
+        job.params.insert_ptr("colorSpace", RGBColorSpace::sRGB);
+        materials.emplace_back(Material::create(job.type, job.params, alloc));
     }
 }
 
+
 Scene::~Scene()
 {
-    for (auto& p : strToTextureObj)
+    /*for (auto& p : strToTextureObj)
     {
         cudaDestroyTextureObject(materials[p.second].baseColorMap);
     }
     for (auto& p : textureDataPtrs)
     {
         cudaFreeArray(p);
-    }
+    }*/
 }
 
 void Scene::LoadTextureFromMemory(void* data, int width, int height, int bits, int channels, cudaTextureObject_t* texObj)
@@ -159,7 +189,8 @@ void Scene::LoadTextureFromMemory(void* data, int width, int height, int bits, i
 void Scene::loadTextureFromFile(const std::string& texturePath, cudaTextureObject_t* texObj, int type)
 {
     int width, height, channels;
-    if (!type)
+    std::string ext = texturePath.substr(texturePath.find_last_of('.') + 1);
+    if (ext != "hdr")
     {
         unsigned char* data = stbi_load(texturePath.c_str(), &width, &height, &channels, 4);
         if (data) {
@@ -324,7 +355,7 @@ void MikkTSpaceSetTSpaceBasic(const SMikkTSpaceContext* pContext, const float fv
 }
 
 
-//load model using tinyobjloader and tinygltf
+// load model using tinyobjloader and tinygltf
 bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNormal)
 {
     cout << "Loading Model " << modelPath << " ..." << endl;
@@ -345,6 +376,7 @@ bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNorma
         if (!ret)  return false;
 
         int matOffset = materials.size();
+        /*
         for (const auto& mat : aMaterials)
         {
             Material newMat{};
@@ -357,7 +389,7 @@ bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNorma
             }
             materials.emplace_back(newMat);
 
-        }
+        }*/
 
 
         std::unordered_map<std::pair<glm::vec3, glm::vec2>, unsigned> vertex_set;
@@ -437,7 +469,7 @@ bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNorma
                 {
                     objects[i].materialid = mID;
                 }
-                cout << "Connecting Geom " << objectid << " to Material " << mID << "..." << endl;
+                cout << "Connecting Object " << objectid << " to Material " << mID << "..." << endl;
             }
         }
 
@@ -476,296 +508,296 @@ bool Scene::loadModel(const string& modelPath, int objectid, bool useVertexNorma
         }
 
     }
-    else//gltf
-    {
-        tinygltf::Model model;
-        tinygltf::TinyGLTF loader;
-        std::string err;
-        std::string warn;
+    //else//gltf
+    //{
+    //    tinygltf::Model model;
+    //    tinygltf::TinyGLTF loader;
+    //    std::string err;
+    //    std::string warn;
 
-        bool ret;
-        if (postfix == "glb")
-            ret = loader.LoadBinaryFromFile(&model, &err, &warn, modelPath.c_str());
-        else if (postfix == "gltf")
-            ret = loader.LoadASCIIFromFile(&model, &err, &warn, modelPath.c_str());
-        else assert(0);//unexpected format
+    //    bool ret;
+    //    if (postfix == "glb")
+    //        ret = loader.LoadBinaryFromFile(&model, &err, &warn, modelPath.c_str());
+    //    else if (postfix == "gltf")
+    //        ret = loader.LoadASCIIFromFile(&model, &err, &warn, modelPath.c_str());
+    //    else assert(0);//unexpected format
 
-        if (!warn.empty())  std::cout << "Tiny GLTF Warn: " << warn << std::endl;
+    //    if (!warn.empty())  std::cout << "Tiny GLTF Warn: " << warn << std::endl;
 
-        if (!err.empty()) std::cout << "Tiny GLTF Err: " << err << std::endl;
+    //    if (!err.empty()) std::cout << "Tiny GLTF Err: " << err << std::endl;
 
-        if (!ret) 
-        {
-            std::cout << "Failed to parse glTF" << std::endl;
-            return -1;
-        }
-        int matOffset = materials.size();
-        //load materials
-        for (size_t i = 0; i < model.materials.size(); i++)
-        {
-            Material newMat;
-            newMat.type = metallicWorkflow;
-            auto& gltfMat = model.materials[i];
-            auto& pbr = gltfMat.pbrMetallicRoughness;
-            newMat.color[0] = pbr.baseColorFactor[0];
-            newMat.color[1] = pbr.baseColorFactor[1];
-            newMat.color[2] = pbr.baseColorFactor[2];
-            newMat.roughness = pbr.roughnessFactor;
-            newMat.metallic = pbr.metallicFactor;
-            auto& baseColorTex = pbr.baseColorTexture;
-            auto& metallicRoughnessTex = pbr.metallicRoughnessTexture;
-            auto& normalTex = gltfMat.normalTexture;
-            if (baseColorTex.index != -1)
-            {
-                assert(baseColorTex.texCoord == 0);//multi texcoord is not supported
-                auto& tex = model.textures[baseColorTex.index];
-                auto& image = model.images[tex.source];
-                char* tmpBuffer = new char[image.image.size()];
-                memcpy(tmpBuffer, &image.image[0], image.image.size());
-                LoadTextureFromMemoryJobs.emplace_back(tmpBuffer, materials.size(), TextureType::color, image.width, image.height, image.bits, image.component);
-            }
-            if (metallicRoughnessTex.index != -1)
-            {
-                assert(metallicRoughnessTex.texCoord == 0);//multi texcoord is not supported
-                auto& tex = model.textures[metallicRoughnessTex.index];
-                auto& image = model.images[tex.source];
-                char* tmpBuffer = new char[image.image.size()];
-                memcpy(tmpBuffer, &image.image[0], image.image.size());
-                LoadTextureFromMemoryJobs.emplace_back(tmpBuffer, materials.size(), TextureType::metallicroughness, image.width, image.height, image.bits, image.component);
-            }
-            if (normalTex.index != -1)
-            {
-                assert(normalTex.texCoord == 0);//multi texcoord is not supported
-                auto& tex = model.textures[normalTex.index];
-                auto& image = model.images[tex.source];
-                char* tmpBuffer = new char[image.image.size()];
-                memcpy(tmpBuffer, &image.image[0], image.image.size());
-                LoadTextureFromMemoryJobs.emplace_back(tmpBuffer, materials.size(), TextureType::normal, image.width, image.height, image.bits, image.component);
-            }
-            if (gltfMat.extensions.count("KHR_materials_transmission")|| gltfMat.extensions.count("KHR_materials_volume")||gltfMat.alphaMode=="BLEND")//limited support for translucency
-            {
-                newMat.type = frenselSpecular;
-                //newMat.color = gltfMat.extensions["KHR_materials_volume"].Get("attenuationColor").GetNumberAsDouble();
-                newMat.color = glm::vec3(0.98f);
-                if (gltfMat.extensions.count("KHR_materials_ior"))
-                    newMat.indexOfRefraction = gltfMat.extensions["KHR_materials_ior"].Get("ior").GetNumberAsDouble();
-                else
-                    newMat.indexOfRefraction = 1.5f;
-            }
-            materials.emplace_back(newMat);
-        }
+    //    if (!ret) 
+    //    {
+    //        std::cout << "Failed to parse glTF" << std::endl;
+    //        return -1;
+    //    }
+    //    int matOffset = materials.size();
+    //    //load materials
+    //    for (size_t i = 0; i < model.materials.size(); i++)
+    //    {
+    //        Material newMat;
+    //        newMat.type = metallicWorkflow;
+    //        auto& gltfMat = model.materials[i];
+    //        auto& pbr = gltfMat.pbrMetallicRoughness;
+    //        newMat.color[0] = pbr.baseColorFactor[0];
+    //        newMat.color[1] = pbr.baseColorFactor[1];
+    //        newMat.color[2] = pbr.baseColorFactor[2];
+    //        newMat.roughness = pbr.roughnessFactor;
+    //        newMat.metallic = pbr.metallicFactor;
+    //        auto& baseColorTex = pbr.baseColorTexture;
+    //        auto& metallicRoughnessTex = pbr.metallicRoughnessTexture;
+    //        auto& normalTex = gltfMat.normalTexture;
+    //        if (baseColorTex.index != -1)
+    //        {
+    //            assert(baseColorTex.texCoord == 0);//multi texcoord is not supported
+    //            auto& tex = model.textures[baseColorTex.index];
+    //            auto& image = model.images[tex.source];
+    //            char* tmpBuffer = new char[image.image.size()];
+    //            memcpy(tmpBuffer, &image.image[0], image.image.size());
+    //            LoadTextureFromMemoryJobs.emplace_back(tmpBuffer, materials.size(), TextureType::color, image.width, image.height, image.bits, image.component);
+    //        }
+    //        if (metallicRoughnessTex.index != -1)
+    //        {
+    //            assert(metallicRoughnessTex.texCoord == 0);//multi texcoord is not supported
+    //            auto& tex = model.textures[metallicRoughnessTex.index];
+    //            auto& image = model.images[tex.source];
+    //            char* tmpBuffer = new char[image.image.size()];
+    //            memcpy(tmpBuffer, &image.image[0], image.image.size());
+    //            LoadTextureFromMemoryJobs.emplace_back(tmpBuffer, materials.size(), TextureType::metallicroughness, image.width, image.height, image.bits, image.component);
+    //        }
+    //        if (normalTex.index != -1)
+    //        {
+    //            assert(normalTex.texCoord == 0);//multi texcoord is not supported
+    //            auto& tex = model.textures[normalTex.index];
+    //            auto& image = model.images[tex.source];
+    //            char* tmpBuffer = new char[image.image.size()];
+    //            memcpy(tmpBuffer, &image.image[0], image.image.size());
+    //            LoadTextureFromMemoryJobs.emplace_back(tmpBuffer, materials.size(), TextureType::normal, image.width, image.height, image.bits, image.component);
+    //        }
+    //        if (gltfMat.extensions.count("KHR_materials_transmission")|| gltfMat.extensions.count("KHR_materials_volume")||gltfMat.alphaMode=="BLEND")//limited support for translucency
+    //        {
+    //            newMat.type = frenselSpecular;
+    //            //newMat.color = gltfMat.extensions["KHR_materials_volume"].Get("attenuationColor").GetNumberAsDouble();
+    //            newMat.color = glm::vec3(0.98f);
+    //            if (gltfMat.extensions.count("KHR_materials_ior"))
+    //                newMat.indexOfRefraction = gltfMat.extensions["KHR_materials_ior"].Get("ior").GetNumberAsDouble();
+    //            else
+    //                newMat.indexOfRefraction = 1.5f;
+    //        }
+    //        materials.emplace_back(newMat);
+    //    }
 
-       
-        std::unordered_map<int, glm::mat4> globalTransRec;
-        std::vector<int> sortedIdx;
-        GLTFNodetopologicalSort(model.nodes, sortedIdx);
+    //   
+    //    std::unordered_map<int, glm::mat4> globalTransRec;
+    //    std::vector<int> sortedIdx;
+    //    GLTFNodetopologicalSort(model.nodes, sortedIdx);
 
-        for (size_t i = 0; i < model.nodes.size(); ++i)
-        {
-            int curr = sortedIdx[i];
-            GLTFNodeGetGlobalTransform(model.nodes, curr, globalTransRec);
-        }
-        
-        int modelStartIdx = objects.size();
+    //    for (size_t i = 0; i < model.nodes.size(); ++i)
+    //    {
+    //        int curr = sortedIdx[i];
+    //        GLTFNodeGetGlobalTransform(model.nodes, curr, globalTransRec);
+    //    }
+    //    
+    //    int modelStartIdx = objects.size();
 
-        for (size_t i = 0; i < model.nodes.size(); ++i) 
-        {
-            tinygltf::Node& node = model.nodes[i];
-            if (node.camera != -1 || node.mesh == -1) continue;//ignore GLTF's camera
-            auto& mesh = model.meshes[node.mesh];
-            const glm::mat4& trans = globalTransRec[i];
-            
-            for (auto& primtive : mesh.primitives)
-            {
-                int triangleIdxOffset = verticies.size();//each gltf primitive assume a index starts with 0
-                assert(primtive.mode == TINYGLTF_MODE_TRIANGLES);
-                Object newModel;
-                newModel.type = TRIANGLE_MESH;
-                newModel.triangleStart = triangles.size();
-                newModel.materialid = primtive.material + matOffset;
-                newModel.Transform.transform = trans;
-                
-                int indicesAccessorIdx = primtive.indices;
-                int positionAccessorIdx = -1, normalAccessorIdx = -1, texcoordAccessorIdx = -1;
-                if (primtive.attributes.count("POSITION"))
-                {
-                    positionAccessorIdx = primtive.attributes["POSITION"];
-                }
-                if (primtive.attributes.count("NORMAL")) 
-                {
-                    normalAccessorIdx = primtive.attributes["NORMAL"];
-                }
-                if (primtive.attributes.count("TEXCOORD_0"))
-                {
-                    texcoordAccessorIdx = primtive.attributes["TEXCOORD_0"];
-                }
-                assert(positionAccessorIdx != -1 && indicesAccessorIdx != -1);
-                //Load indices
-                auto& indicesAccessor = model.accessors[indicesAccessorIdx];
-                if (indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_SHORT || indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT)
-                {
-                    auto& bView = model.bufferViews[indicesAccessor.bufferView];
-                    size_t stride = bView.byteStride ? bView.byteStride : (indicesAccessor.type & 0xF) * sizeof(short);
-                    unsigned char* ptr = &model.buffers[bView.buffer].data[0] + bView.byteOffset + indicesAccessor.byteOffset;
-                    for (int i = 0; i < indicesAccessor.count; i += 3)
-                    {
-                        glm::ivec3 tri;
-                        tri.x = *(unsigned short*)(ptr + (i + 0) * stride) + triangleIdxOffset;
-                        tri.y = *(unsigned short*)(ptr + (i + 1) * stride) + triangleIdxOffset;
-                        tri.z = *(unsigned short*)(ptr + (i + 2) * stride) + triangleIdxOffset;
-                        triangles.emplace_back(tri);
-                    }
-                }
-                else if (indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_INT || indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)
-                {
-                    auto& bView = model.bufferViews[indicesAccessor.bufferView];
-                    size_t stride = bView.byteStride ? bView.byteStride : (indicesAccessor.type & 0xF) * sizeof(int);
-                    unsigned char* ptr = &model.buffers[bView.buffer].data[0] + bView.byteOffset + indicesAccessor.byteOffset;
-                    for (int i = 0; i < indicesAccessor.count; i += 3)
-                    {
-                        glm::ivec3 tri;
-                        tri.x = *(unsigned int*)(ptr + (i + 0) * stride) + triangleIdxOffset;
-                        tri.y = *(unsigned int*)(ptr + (i + 1) * stride) + triangleIdxOffset;
-                        tri.z = *(unsigned int*)(ptr + (i + 2) * stride) + triangleIdxOffset;
-                        triangles.emplace_back(tri);
-                    }
-                }
-                else assert(0);//unexpected
-                newModel.triangleEnd = triangles.size();
-                objects.emplace_back(newModel);
-                //Load position
-                auto& positionAccessor = model.accessors[positionAccessorIdx];
-                if (positionAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT)
-                {
-                    assert(positionAccessor.type = TINYGLTF_TYPE_VEC3);
-                    auto& bView = model.bufferViews[positionAccessor.bufferView];
-                    size_t stride = bView.byteStride ? bView.byteStride : (positionAccessor.type & 0xF) * sizeof(float);
-                    unsigned char* ptr = &model.buffers[bView.buffer].data[0] + bView.byteOffset + positionAccessor.byteOffset;
-                    for (int i = 0; i < positionAccessor.count; i++)
-                    {
-                        glm::vec3 pos;
-                        pos.x = *(float*)(ptr + (i * stride + sizeof(float) * 0));
-                        pos.y = *(float*)(ptr + (i * stride + sizeof(float) * 1));
-                        pos.z = *(float*)(ptr + (i * stride + sizeof(float) * 2));
-                        verticies.emplace_back(pos);
-                    }
-                }
-                else assert(0);//unexpected
-                //Load normals
-                auto& normalAccessor = model.accessors[normalAccessorIdx];
-                if (useVertexNormal && normalAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT)
-                {
-                    assert(normalAccessor.type = TINYGLTF_TYPE_VEC3);
-                    auto& bView = model.bufferViews[normalAccessor.bufferView];
-                    size_t stride = bView.byteStride ? bView.byteStride : (normalAccessor.type & 0xF) * sizeof(float);
-                    unsigned char* ptr = &model.buffers[bView.buffer].data[0] + bView.byteOffset + normalAccessor.byteOffset;
-                    for (int i = 0; i < normalAccessor.count; i++)
-                    {
-                        glm::vec3 normal;
-                        normal.x = *(float*)(ptr + (i * stride + sizeof(float) * 0));
-                        normal.y = *(float*)(ptr + (i * stride + sizeof(float) * 1));
-                        normal.z = *(float*)(ptr + (i * stride + sizeof(float) * 2));
-                        normals.emplace_back(normal);
-                    }
-                }
-                else assert(0);//unexpected
-                if(useVertexNormal)
-                    assert(verticies.size() == normals.size());
-                //Load uv
-                auto& texcoordAccessor = model.accessors[texcoordAccessorIdx];
-                if (texcoordAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT)
-                {
-                    assert(texcoordAccessor.type = TINYGLTF_TYPE_VEC2);
-                    auto& bView = model.bufferViews[texcoordAccessor.bufferView];
-                    size_t stride = bView.byteStride ? bView.byteStride : (texcoordAccessor.type & 0x7) * sizeof(float);
-                    unsigned char* ptr = &model.buffers[bView.buffer].data[0] + bView.byteOffset + texcoordAccessor.byteOffset;
-                    for (int i = 0; i < texcoordAccessor.count; i++)
-                    {
-                        glm::vec2 uv;
-                        uv.x = *(float*)(ptr + (i * stride + sizeof(float) * 0));
-                        uv.y = *(float*)(ptr + (i * stride + sizeof(float) * 1));
-                        uvs.emplace_back(uv);
-                    }
-                }
-                else assert(0);//unexpected
-                assert(verticies.size() == uvs.size());
-                if (useVertexNormal)
-                {
-                    //use MikkTSpace to calculate tangents
-                    fSigns.resize(normals.size());
-                    tangents.resize(normals.size());
-                    SMikkTSpaceInterface interface = {
-                        MikkTSpaceGetNumFaces,
-                        MikkTSpaceGetNumVerticesOfFace,
-                        MikkTSpaceGetPosition,
-                        MikkTSpaceGetNormal,
-                        MikkTSpaceGetTexCoord,
-                        MikkTSpaceSetTSpaceBasic,
-                        NULL,  // setTSpace. Can be NULL.
-                    };
-                    MikkTSpaceHelper helperStruct;
-                    helperStruct.i = objects.size() - 1;
-                    helperStruct.scene = this;
-                    SMikkTSpaceContext context = {
-                        &interface,
-                        &helperStruct,  
-                    };
-                    genTangSpaceDefault(&context);
-                }
-            }
-        }
-        int modelEndIdx = objects.size();
+    //    for (size_t i = 0; i < model.nodes.size(); ++i) 
+    //    {
+    //        tinygltf::Node& node = model.nodes[i];
+    //        if (node.camera != -1 || node.mesh == -1) continue;//ignore GLTF's camera
+    //        auto& mesh = model.meshes[node.mesh];
+    //        const glm::mat4& trans = globalTransRec[i];
+    //        
+    //        for (auto& primtive : mesh.primitives)
+    //        {
+    //            int triangleIdxOffset = verticies.size();//each gltf primitive assume a index starts with 0
+    //            assert(primtive.mode == TINYGLTF_MODE_TRIANGLES);
+    //            Object newModel;
+    //            newModel.type = TRIANGLE_MESH;
+    //            newModel.triangleStart = triangles.size();
+    //            newModel.materialid = primtive.material + matOffset;
+    //            newModel.Transform.transform = trans;
+    //            
+    //            int indicesAccessorIdx = primtive.indices;
+    //            int positionAccessorIdx = -1, normalAccessorIdx = -1, texcoordAccessorIdx = -1;
+    //            if (primtive.attributes.count("POSITION"))
+    //            {
+    //                positionAccessorIdx = primtive.attributes["POSITION"];
+    //            }
+    //            if (primtive.attributes.count("NORMAL")) 
+    //            {
+    //                normalAccessorIdx = primtive.attributes["NORMAL"];
+    //            }
+    //            if (primtive.attributes.count("TEXCOORD_0"))
+    //            {
+    //                texcoordAccessorIdx = primtive.attributes["TEXCOORD_0"];
+    //            }
+    //            assert(positionAccessorIdx != -1 && indicesAccessorIdx != -1);
+    //            //Load indices
+    //            auto& indicesAccessor = model.accessors[indicesAccessorIdx];
+    //            if (indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_SHORT || indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT)
+    //            {
+    //                auto& bView = model.bufferViews[indicesAccessor.bufferView];
+    //                size_t stride = bView.byteStride ? bView.byteStride : (indicesAccessor.type & 0xF) * sizeof(short);
+    //                unsigned char* ptr = &model.buffers[bView.buffer].data[0] + bView.byteOffset + indicesAccessor.byteOffset;
+    //                for (int i = 0; i < indicesAccessor.count; i += 3)
+    //                {
+    //                    glm::ivec3 tri;
+    //                    tri.x = *(unsigned short*)(ptr + (i + 0) * stride) + triangleIdxOffset;
+    //                    tri.y = *(unsigned short*)(ptr + (i + 1) * stride) + triangleIdxOffset;
+    //                    tri.z = *(unsigned short*)(ptr + (i + 2) * stride) + triangleIdxOffset;
+    //                    triangles.emplace_back(tri);
+    //                }
+    //            }
+    //            else if (indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_INT || indicesAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)
+    //            {
+    //                auto& bView = model.bufferViews[indicesAccessor.bufferView];
+    //                size_t stride = bView.byteStride ? bView.byteStride : (indicesAccessor.type & 0xF) * sizeof(int);
+    //                unsigned char* ptr = &model.buffers[bView.buffer].data[0] + bView.byteOffset + indicesAccessor.byteOffset;
+    //                for (int i = 0; i < indicesAccessor.count; i += 3)
+    //                {
+    //                    glm::ivec3 tri;
+    //                    tri.x = *(unsigned int*)(ptr + (i + 0) * stride) + triangleIdxOffset;
+    //                    tri.y = *(unsigned int*)(ptr + (i + 1) * stride) + triangleIdxOffset;
+    //                    tri.z = *(unsigned int*)(ptr + (i + 2) * stride) + triangleIdxOffset;
+    //                    triangles.emplace_back(tri);
+    //                }
+    //            }
+    //            else assert(0);//unexpected
+    //            newModel.triangleEnd = triangles.size();
+    //            objects.emplace_back(newModel);
+    //            //Load position
+    //            auto& positionAccessor = model.accessors[positionAccessorIdx];
+    //            if (positionAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT)
+    //            {
+    //                assert(positionAccessor.type = TINYGLTF_TYPE_VEC3);
+    //                auto& bView = model.bufferViews[positionAccessor.bufferView];
+    //                size_t stride = bView.byteStride ? bView.byteStride : (positionAccessor.type & 0xF) * sizeof(float);
+    //                unsigned char* ptr = &model.buffers[bView.buffer].data[0] + bView.byteOffset + positionAccessor.byteOffset;
+    //                for (int i = 0; i < positionAccessor.count; i++)
+    //                {
+    //                    glm::vec3 pos;
+    //                    pos.x = *(float*)(ptr + (i * stride + sizeof(float) * 0));
+    //                    pos.y = *(float*)(ptr + (i * stride + sizeof(float) * 1));
+    //                    pos.z = *(float*)(ptr + (i * stride + sizeof(float) * 2));
+    //                    verticies.emplace_back(pos);
+    //                }
+    //            }
+    //            else assert(0);//unexpected
+    //            //Load normals
+    //            auto& normalAccessor = model.accessors[normalAccessorIdx];
+    //            if (useVertexNormal && normalAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT)
+    //            {
+    //                assert(normalAccessor.type = TINYGLTF_TYPE_VEC3);
+    //                auto& bView = model.bufferViews[normalAccessor.bufferView];
+    //                size_t stride = bView.byteStride ? bView.byteStride : (normalAccessor.type & 0xF) * sizeof(float);
+    //                unsigned char* ptr = &model.buffers[bView.buffer].data[0] + bView.byteOffset + normalAccessor.byteOffset;
+    //                for (int i = 0; i < normalAccessor.count; i++)
+    //                {
+    //                    glm::vec3 normal;
+    //                    normal.x = *(float*)(ptr + (i * stride + sizeof(float) * 0));
+    //                    normal.y = *(float*)(ptr + (i * stride + sizeof(float) * 1));
+    //                    normal.z = *(float*)(ptr + (i * stride + sizeof(float) * 2));
+    //                    normals.emplace_back(normal);
+    //                }
+    //            }
+    //            else assert(0);//unexpected
+    //            if(useVertexNormal)
+    //                assert(verticies.size() == normals.size());
+    //            //Load uv
+    //            auto& texcoordAccessor = model.accessors[texcoordAccessorIdx];
+    //            if (texcoordAccessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT)
+    //            {
+    //                assert(texcoordAccessor.type = TINYGLTF_TYPE_VEC2);
+    //                auto& bView = model.bufferViews[texcoordAccessor.bufferView];
+    //                size_t stride = bView.byteStride ? bView.byteStride : (texcoordAccessor.type & 0x7) * sizeof(float);
+    //                unsigned char* ptr = &model.buffers[bView.buffer].data[0] + bView.byteOffset + texcoordAccessor.byteOffset;
+    //                for (int i = 0; i < texcoordAccessor.count; i++)
+    //                {
+    //                    glm::vec2 uv;
+    //                    uv.x = *(float*)(ptr + (i * stride + sizeof(float) * 0));
+    //                    uv.y = *(float*)(ptr + (i * stride + sizeof(float) * 1));
+    //                    uvs.emplace_back(uv);
+    //                }
+    //            }
+    //            else assert(0);//unexpected
+    //            assert(verticies.size() == uvs.size());
+    //            if (useVertexNormal)
+    //            {
+    //                //use MikkTSpace to calculate tangents
+    //                fSigns.resize(normals.size());
+    //                tangents.resize(normals.size());
+    //                SMikkTSpaceInterface interface = {
+    //                    MikkTSpaceGetNumFaces,
+    //                    MikkTSpaceGetNumVerticesOfFace,
+    //                    MikkTSpaceGetPosition,
+    //                    MikkTSpaceGetNormal,
+    //                    MikkTSpaceGetTexCoord,
+    //                    MikkTSpaceSetTSpaceBasic,
+    //                    NULL,  // setTSpace. Can be NULL.
+    //                };
+    //                MikkTSpaceHelper helperStruct;
+    //                helperStruct.i = objects.size() - 1;
+    //                helperStruct.scene = this;
+    //                SMikkTSpaceContext context = {
+    //                    &interface,
+    //                    &helperStruct,  
+    //                };
+    //                genTangSpaceDefault(&context);
+    //            }
+    //        }
+    //    }
+    //    int modelEndIdx = objects.size();
 
-        std::string line;
-        //link material
-        utilityCore::safeGetline(fp_in, line);
-        if (!line.empty() && fp_in.good()) {
-            vector<string> tokens = utilityCore::tokenizeString(line);
-            int mID = atoi(tokens[1].c_str());
-            if (mID != -1)
-            {
-                for (int i = modelStartIdx; i != modelEndIdx; i++)
-                {
-                    objects[i].materialid = mID;
-                }
-                cout << "Connecting Geom " << objectid << " to Material " << mID << "..." << endl;
-            }
-        }
+    //    std::string line;
+    //    //link material
+    //    utilityCore::safeGetline(fp_in, line);
+    //    if (!line.empty() && fp_in.good()) {
+    //        vector<string> tokens = utilityCore::tokenizeString(line);
+    //        int mID = atoi(tokens[1].c_str());
+    //        if (mID != -1)
+    //        {
+    //            for (int i = modelStartIdx; i != modelEndIdx; i++)
+    //            {
+    //                objects[i].materialid = mID;
+    //            }
+    //            cout << "Connecting Geom " << objectid << " to Material " << mID << "..." << endl;
+    //        }
+    //    }
 
-        ObjectTransform modelTrans;
-        //load transformations
-        utilityCore::safeGetline(fp_in, line);
-        while (!line.empty() && fp_in.good())
-        {
-            vector<string> tokens = utilityCore::tokenizeString(line);
+    //    ObjectTransform modelTrans;
+    //    //load transformations
+    //    utilityCore::safeGetline(fp_in, line);
+    //    while (!line.empty() && fp_in.good())
+    //    {
+    //        vector<string> tokens = utilityCore::tokenizeString(line);
 
-            //load tranformations
-            if (strcmp(tokens[0].c_str(), "TRANS") == 0)
-            {
-                modelTrans.translation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-            }
-            else if (strcmp(tokens[0].c_str(), "ROTAT") == 0)
-            {
-                modelTrans.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-            }
-            else if (strcmp(tokens[0].c_str(), "SCALE") == 0)
-            {
-                modelTrans.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-            }
+    //        //load tranformations
+    //        if (strcmp(tokens[0].c_str(), "TRANS") == 0)
+    //        {
+    //            modelTrans.translation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+    //        }
+    //        else if (strcmp(tokens[0].c_str(), "ROTAT") == 0)
+    //        {
+    //            modelTrans.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+    //        }
+    //        else if (strcmp(tokens[0].c_str(), "SCALE") == 0)
+    //        {
+    //            modelTrans.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+    //        }
 
-            utilityCore::safeGetline(fp_in, line);
-        }
+    //        utilityCore::safeGetline(fp_in, line);
+    //    }
 
-        modelTrans.transform = utilityCore::buildTransformationMatrix(
-            modelTrans.translation, modelTrans.rotation, modelTrans.scale);
+    //    modelTrans.transform = utilityCore::buildTransformationMatrix(
+    //        modelTrans.translation, modelTrans.rotation, modelTrans.scale);
 
-        for (int i = modelStartIdx; i != modelEndIdx; i++)
-        {
-            objects[i].Transform.transform = modelTrans.transform * objects[i].Transform.transform;
-            objects[i].Transform.inverseTransform = glm::inverse(objects[i].Transform.transform);
-            objects[i].Transform.invTranspose = glm::inverseTranspose(objects[i].Transform.transform);
-        }
-    }
+    //    for (int i = modelStartIdx; i != modelEndIdx; i++)
+    //    {
+    //        objects[i].Transform.transform = modelTrans.transform * objects[i].Transform.transform;
+    //        objects[i].Transform.inverseTransform = glm::inverse(objects[i].Transform.transform);
+    //        objects[i].Transform.invTranspose = glm::inverseTranspose(objects[i].Transform.transform);
+    //    }
+    //}
 
     return true;
 }
@@ -911,13 +943,15 @@ int Scene::loadCamera() {
 
 int Scene::loadMaterial(string materialid) {
     int id = atoi(materialid.c_str());
-    if (id != materials.size()) {
+    if (id != LoadMaterialJobs.size()) {
         std::cout << "ERROR: MATERIAL ID does not match expected number of materials" << endl;
         return -1;
     } else {
         std::cout << "Loading Material " << id << "..." << endl;
-        Material newMaterial;
-
+        //Material newMaterial;
+        MaterialParams params;
+        Allocator alloc;
+        std::string type;
         //load static properties
         while(true){
             string line;
@@ -926,35 +960,48 @@ int Scene::loadMaterial(string materialid) {
             vector<string> tokens = utilityCore::tokenizeString(line);
             if (strcmp(tokens[0].c_str(), "TYPE") == 0) {
                 if (tokens[1] == "diffuse")
-                    newMaterial.type = diffuse;
+                    type = "diffuse";
                 else if (tokens[1] == "frenselSpecular")
-                    newMaterial.type = frenselSpecular;
-                else if (tokens[1] == "microfacet")
-                    newMaterial.type = microfacet;
-                else if (tokens[1] == "metallicWorkflow")
+                    type = "dielectric";
+                else if (tokens[1] == "conductor")
+                    type = "conductor";
+                else if (tokens[1] == "emitting")
+                    type = "emissive";
+                /*else if (tokens[1] == "metallicWorkflow")
                     newMaterial.type = metallicWorkflow;
                 else if (tokens[1] == "blinnphong")
                     newMaterial.type = blinnphong;
                 else if (tokens[1] == "asymMicrofacet")
                     newMaterial.type = asymMicrofacet;
                 else
-                    newMaterial.type = emitting;
+                    newMaterial.type = emitting;*/
             }
             else if (strcmp(tokens[0].c_str(), "RGB") == 0) {
                 glm::vec3 color( atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()) );
-                newMaterial.color = color;
-            } else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
+                params.insert_vec3("albedo", color);
+            } 
+            else if (strcmp(tokens[0].c_str(), "REFRIOR") == 0) {
                 float ior = atof(tokens[1].c_str());
-                newMaterial.indexOfRefraction = ior;
-            } else if (strcmp(tokens[0].c_str(), "EMITTANCE") == 0) {
+                params.insert_float("eta", ior);
+                //params.insert_spectrum("eta", alloc.new_object<ConstantSpectrum>(ior));
+            }
+            else if (strcmp(tokens[0].c_str(), "REFRIOR_NAMED") == 0) {
+                params.insert_string("eta", tokens[1]);
+            }
+            else if (strcmp(tokens[0].c_str(), "REFRIOR_RGB") == 0) {
+                glm::vec3 color(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
+                params.insert_vec3("eta", color);
+                //params.insert_spectrum("eta", alloc.new_object<RGBUnboundedSpectrum>(*RGBColorSpace::sRGB, color));
+            }
+            else if (strcmp(tokens[0].c_str(), "EMITTANCE") == 0) {
                 float emittance = atof(tokens[1].c_str());
-                newMaterial.emittance = emittance;
+                params.insert_float("emittance", emittance);
             }
             else if (strcmp(tokens[0].c_str(), "ROUGHNESS") == 0) {
                 float roughness = atof(tokens[1].c_str());
-                newMaterial.roughness = roughness;
+                params.insert_float("roughness", roughness);
             }
-            else if (strcmp(tokens[0].c_str(), "METALLIC") == 0) {
+            /*else if (strcmp(tokens[0].c_str(), "METALLIC") == 0) {
                 float metallic = atof(tokens[1].c_str());
                 newMaterial.metallic = metallic;
             }
@@ -991,9 +1038,10 @@ int Scene::loadMaterial(string materialid) {
             else if (strcmp(tokens[0].c_str(), "ASYM_ALBEDO") == 0) {
                 glm::vec3 color(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
                 newMaterial.asymmicrofacet.albedo = color;
-            }
+            }*/
         }
-        materials.push_back(newMaterial);
+        LoadMaterialJobs.emplace_back(type, params);
+        //materials.push_back(Material::create(type, params, gpuAlloc));
         return 1;
     }
 }
@@ -1025,7 +1073,7 @@ void Scene::CreateLights()
     for (int i = 0; i < primitives.size(); i++)
     {
         const Object& obj = objects[primitives[i].objID];
-        if (materials[obj.materialid].type == emitting)
+        if (materials[obj.materialid].Is<EmissiveMaterial>())
         {
             lights.emplace_back(primitives[i]);
         }

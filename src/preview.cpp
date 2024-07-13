@@ -117,6 +117,7 @@ void cleanupCuda() {
 }
 
 void initCuda() {
+	cudaDeviceReset();
 	cudaGLSetGLDevice(0);
 	cudaError_t err = cudaGetLastError();
 	if (err != cudaSuccess) {
@@ -160,7 +161,7 @@ bool init() {
 	window = glfwCreateWindow(width, height, "CIS 565 Path Tracer", NULL, NULL);
 	if (!window) {
 		glfwTerminate();
-		return false;
+		throw std::runtime_error("Failed to create window");
 	}
 	glfwMakeContextCurrent(window);
 	glfwSetKeyCallback(window, keyCallback);

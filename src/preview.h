@@ -3,6 +3,7 @@
 extern GLuint pbo;
 
 std::string currentTimeString();
+void initCuda();
 bool init();
 void mainLoop();
 void initPBO();

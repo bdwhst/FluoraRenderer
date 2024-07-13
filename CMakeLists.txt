@@ -1,6 +1,6 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.24)
 
-project(cis565_path_tracer)
+project(Fluora CXX CUDA C)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
@@ -10,8 +10,8 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-# Enable C++11 for host code
-set(CMAKE_CXX_STANDARD 11)
+# Enable C++20 for host code
+set(CMAKE_CXX_STANDARD 20)
 
 # Set a default build type if none was specified
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -25,9 +25,14 @@ endif()
 ########################################
 find_package(CUDA 10 REQUIRED)
 include(${CMAKE_MODULE_PATH}/CUDAComputesList.cmake)
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-relaxed-constexpr")
 
+list(APPEND CUDA_NVCC_FLAGS "-rdc=true")
 list(APPEND CUDA_NVCC_FLAGS ${CUDA_GENERATE_CODE})
 list(APPEND CUDA_NVCC_FLAGS_DEBUG "-g -G")
+list(APPEND CUDA_NVCC_FLAGS "--std=c++20")
+
+set(CMAKE_CUDA_FLAGS_DEBUG "${CMAKE_CUDA_FLAGS_DEBUG} -G")
 set(CUDA_VERBOSE_BUILD ON)
 
 if(WIN32)
@@ -62,67 +67,69 @@ set(GLM_ROOT_DIR "external")
 find_package(GLM REQUIRED)
 include_directories(${GLM_INCLUDE_DIRS})
 
-set(headers
-    src/main.h
-    src/image.h
-    src/interactions.h
-    src/intersections.h
-    src/microfacet.h
-    src/glslUtility.hpp
-    src/pathtrace.h
-    src/scene.h
-    src/sceneStructs.h
-    src/preview.h
-    src/utilities.h
-    src/randomUtils.h
-    src/bvh.h
-    src/ImGui/imconfig.h
-	
-	src/ImGui/imgui.h
-    src/ImGui/imconfig.h
-    src/ImGui/imgui_impl_glfw.h
-     src/ImGui/imgui_impl_opengl3.h 
-     src/ImGui/imgui_impl_opengl3_loader.h 
-     src/ImGui/imgui_internal.h 
-     src/ImGui/imstb_rectpack.h 
-     src/ImGui/imstb_textedit.h 
-     src/ImGui/imstb_truetype.h 
-    )
+file(GLOB_RECURSE headers 
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp"
+)
 
 set(sources
     src/main.cpp
     src/stb.cpp
     src/image.cpp
     src/glslUtility.cpp
+    src/mathUtils.cu
+    src/bsdf.cu
+    src/color.cu
     src/pathtrace.cu
+    src/camera.cu
+    src/materials.cu
     src/scene.cpp
     src/preview.cpp
     src/utilities.cpp
     src/bvh.cpp
+    src/spectrum.cu
 	src/mikktspace/mikktspace.c
     src/ImGui/imgui.cpp 
-      src/ImGui/imgui_demo.cpp 
-      src/ImGui/imgui_draw.cpp 
-     src/ImGui/imgui_impl_glfw.cpp 
-     src/ImGui/imgui_impl_opengl3.cpp 
-     src/ImGui/imgui_tables.cpp 
-     src/ImGui/imgui_widgets.cpp 
+    src/ImGui/imgui_demo.cpp 
+    src/ImGui/imgui_draw.cpp 
+    src/ImGui/imgui_impl_glfw.cpp 
+    src/ImGui/imgui_impl_opengl3.cpp 
+    src/ImGui/imgui_tables.cpp 
+    src/ImGui/imgui_widgets.cpp 
+    src/SpectrumConsts/rgbspectrum_aces.cpp
+    src/SpectrumConsts/rgbspectrum_dci_p3.cpp
+    src/SpectrumConsts/rgbspectrum_rec2020.cpp
+    src/SpectrumConsts/rgbspectrum_srgb.cpp
     )
 
 list(SORT headers)
 list(SORT sources)
 
-source_group(Headers FILES ${headers})
-source_group(Sources FILES ${sources})
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Headers" FILES ${headers})
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Sources" FILES ${sources})
 
-#add_subdirectory(src/ImGui)
-#add_subdirectory(stream_compaction)  # TODO: uncomment if using your stream compaction
 
 link_directories(${PROJECT_SOURCE_DIR}/external/lib)
-cuda_add_executable(${CMAKE_PROJECT_NAME} ${sources} ${headers})
+find_package(CUDAToolkit REQUIRED)
+add_executable(${CMAKE_PROJECT_NAME} ${sources} ${headers})
+set_property(TARGET ${CMAKE_PROJECT_NAME} PROPERTY CUDA_ARCHITECTURES native)
+set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES
+    CUDA_SEPARABLE_COMPILATION ON
+)
 
 target_link_libraries(${CMAKE_PROJECT_NAME}
     ${LIBRARIES}
-    #stream_compaction  # TODO: uncomment if using your stream compaction
+    cudadevrt
     OpenImageDenoise
+)
+
+if (WIN32)
+    file(GLOB DLL_FILES 
+        "${PROJECT_SOURCE_DIR}/external/bin/*.dll"
     )
+    foreach(DLL_FILE ${DLL_FILES})
+        add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+        ${DLL_FILE} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>)
+    endforeach()
+endif()

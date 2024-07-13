@@ -263,7 +263,9 @@ __device__ inline bool util_bvh_leaf_intersect(
                 const glm::vec3& n2 = dev_sceneInfo.modelInfo.dev_normals[tri[2]];
                 tmp_normal = n0 * tmp_baryCoord[0] + n1 * tmp_baryCoord[1] + n2 * tmp_baryCoord[2];
                 tmp_normal = glm::vec3(obj.Transform.invTranspose * glm::vec4(tmp_normal, 0.0));//TODO: precompute transformation
-                
+            }
+            if (dev_sceneInfo.modelInfo.dev_tangents)
+            {
                 const glm::vec3& t0 = dev_sceneInfo.modelInfo.dev_tangents[tri[0]];
                 const glm::vec3& t1 = dev_sceneInfo.modelInfo.dev_tangents[tri[1]];
                 const glm::vec3& t2 = dev_sceneInfo.modelInfo.dev_tangents[tri[2]];

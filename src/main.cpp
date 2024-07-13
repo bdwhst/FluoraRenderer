@@ -33,6 +33,9 @@ int height;
 
 OIDNDevice device;
 
+MonotonicBlockMemoryResourceBackend* mainBackend = nullptr;
+const char* sceneFile = nullptr;
+
 //-------------------------------
 //-------------MAIN--------------
 //-------------------------------
@@ -45,19 +48,53 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 
-	const char* sceneFile = argv[1];
+	sceneFile = argv[1];
 
-
-	// Load scene file
-	scene = new Scene(sceneFile);
-	scene->buildBVH();
-	scene->buildStacklessBVH();
-
-	scene->CreateLights();
+	mainBackend = new MonotonicBlockMemoryResourceBackend(256 * 1024, CUDAMemoryResourceBackend::getInstance());
+	
+	initScene();
 
 	//Create Instance for ImGUIData
 	guiData = new GuiDataContainer();
 	sysTime = time(nullptr);
+	
+
+	// Initialize CUDA and GL components
+	init();
+	stbi_set_flip_vertically_on_load(1);
+	scene->LoadAllTexturesToGPU();
+
+	Allocator alloc(mainBackend);
+
+	spec::init(alloc);
+	RGBToSpectrumTable::init(alloc);
+	RGBColorSpace::init(alloc);
+
+	scene->LoadAllMaterialsToGPU(alloc);
+	scene->CreateLights();
+
+	// Initialize ImGui Data
+	InitImguiData(guiData);
+	InitDataContainer(guiData);
+
+	device = oidnNewDevice(OIDN_DEVICE_TYPE_DEFAULT); // CPU or GPU if available
+	oidnCommitDevice(device);
+	// GLFW main loop
+	mainLoop();
+
+	oidnReleaseDevice(device);
+	return 0;
+}
+
+void initScene()
+{
+	Allocator alloc(mainBackend);
+	// Load scene file
+	scene = new Scene(sceneFile);
+	scene->buildBVH();
+	scene->buildStacklessBVH();
+	
+
 	// Set up camera stuff from loaded path tracer settings
 	iteration = 0;
 	renderState = &scene->state;
@@ -80,23 +117,6 @@ int main(int argc, char** argv) {
 	theta = glm::acos(glm::dot(glm::normalize(viewZY), glm::vec3(0, 1, 0)));
 	ogLookAt = cam.lookAt;
 	zoom = glm::length(cam.position - ogLookAt);
-
-	// Initialize CUDA and GL components
-	init();
-	stbi_set_flip_vertically_on_load(1);
-	scene->LoadAllTextures();
-
-	// Initialize ImGui Data
-	InitImguiData(guiData);
-	InitDataContainer(guiData);
-
-	device = oidnNewDevice(OIDN_DEVICE_TYPE_DEFAULT); // CPU or GPU if available
-	oidnCommitDevice(device);
-	// GLFW main loop
-	mainLoop();
-
-	oidnReleaseDevice(device);
-	return 0;
 }
 
 void saveImage() {
@@ -118,13 +138,13 @@ void saveImage() {
 	OIDNFilter filter = oidnNewFilter(device, "RT");
 
 	oidnSetFilterImage(filter, "color", colorBuf,
-		OIDN_FORMAT_FLOAT3, width, height, 0, 0, 0); // beauty
+		OIDN_FORMAT_float3, width, height, 0, 0, 0); // beauty
 	oidnSetFilterImage(filter, "albedo", albedoBuf,
-		OIDN_FORMAT_FLOAT3, width, height, 0, 0, 0); // auxiliary
+		OIDN_FORMAT_float3, width, height, 0, 0, 0); // auxiliary
 	oidnSetFilterImage(filter, "normal", normalBuf,
-		OIDN_FORMAT_FLOAT3, width, height, 0, 0, 0); // auxiliary
+		OIDN_FORMAT_float3, width, height, 0, 0, 0); // auxiliary
 	oidnSetFilterImage(filter, "output", colorBuf,
-		OIDN_FORMAT_FLOAT3, width, height, 0, 0, 0); // denoised beauty
+		OIDN_FORMAT_float3, width, height, 0, 0, 0); // denoised beauty
 	oidnSetFilterBool(filter, "hdr", true); // beauty image is HDR
 	oidnCommitFilter(filter);
 
@@ -152,7 +172,7 @@ void saveImage() {
 			int index = x + (y * width);
 			glm::vec3 pix = renderState->image[index];
 #if TONEMAPPING
-			img.setPixel(width - 1 - x, y, util_postprocess_gamma(util_postprocess_ACESFilm(pix / samples)));
+			img.setPixel(width - 1 - x, y, util_postprocess_ACESFilm(pix / samples));
 #else
 			img.setPixel(width - 1 - x, y, glm::vec3(pix) / samples);
 #endif
@@ -195,7 +215,8 @@ void runCuda() {
 
 	if (iteration == 0) {
 		pathtraceFree(scene);
-		pathtraceInit(scene);
+		Allocator alloc(mainBackend);
+		pathtraceInit(scene, alloc);
 	}
 
 	if (iteration < renderState->iterations) {

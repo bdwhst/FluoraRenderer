@@ -5,6 +5,10 @@
 #include <cuda_runtime.h>
 #include <glm/glm.hpp>
 
+#include "materials.h"
+#include "spectrum.h"
+#include "camera.h"
+
 #define USE_BVH 1
 #define USE_MIS 0
 #define MIS_POWER_2 1
@@ -137,17 +141,17 @@ struct asymMicrofacetInfo
     phaseSampleFunc fSample;
 };
 
-struct Material {
-    glm::vec3 color = glm::vec3(0);
-    float indexOfRefraction = 0.0;
-    float emittance = 0.0;
-    float metallic = -1.0;
-    float roughness = -1.0;
-    float specExponent = -1.0;
-    asymMicrofacetInfo asymmicrofacet;
-    cudaTextureObject_t baseColorMap = 0, normalMap = 0, metallicRoughnessMap = 0;
-    MaterialType type = diffuse;
-};
+//struct Material {
+//    glm::vec3 color = glm::vec3(0);
+//    float indexOfRefraction = 0.0;
+//    float emittance = 0.0;
+//    float metallic = -1.0;
+//    float roughness = -1.0;
+//    float specExponent = -1.0;
+//    asymMicrofacetInfo asymmicrofacet;
+//    cudaTextureObject_t baseColorMap = 0, normalMap = 0, metallicRoughnessMap = 0;
+//    MaterialType type = diffuse;
+//};
 
 struct Camera {
     glm::ivec2 resolution;
@@ -174,7 +178,8 @@ struct RenderState {
 
 struct PathSegment {
     Ray ray;
-    glm::vec3 transport;
+    SampledSpectrum transport;
+    SampledWavelengths lambda;
     int pixelIndex;
     int remainingBounces;
     float lastMatPdf;
@@ -218,6 +223,7 @@ struct SceneInfoDev {
     Primitive* dev_lights;
     int lightsSize;
     cudaTextureObject_t skyboxObj;
+    PixelSensor* pixelSensor;
 };
 
 struct SceneGbuffer {

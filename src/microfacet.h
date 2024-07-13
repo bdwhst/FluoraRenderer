@@ -7,6 +7,12 @@
 #include "sceneStructs.h"
 #include "interactions.h"
 
+
+__device__ float util_frcomplex()
+{
+
+}
+
 __device__ float util_alpha_i(const glm::vec3& wi, float alpha_x, float alpha_y)
 {
 	const float invSinTheta2 = 1.0f / (1.0f - wi.z * wi.z);
@@ -312,6 +318,11 @@ __device__ glm::vec3 bxdf_asymDielectric_sample(glm::vec3 wo, glm::vec3& through
 		float alphaYB = outside ? mat.alphaYB : mat.alphaYA;
 		float sigmaIn = z > zs ? util_GGX_extinction_coeff(w, alphaXA, alphaYA) : util_GGX_extinction_coeff(w, alphaXB, alphaYB);
 		float sigmaOut = z > zs ? util_GGX_extinction_coeff(w, alphaXB, alphaYB) : util_GGX_extinction_coeff(w, alphaXA, alphaYA);
+		if (sigmaIn == 0.0f)
+		{
+			z = 0.0;
+			break;
+		}
 		float deltaZ = w.z * (-log(U) / sigmaIn);
 		if (z < zs != z + deltaZ < zs)
 		{

@@ -6,10 +6,18 @@
 #include <iostream>
 #include <unordered_map>
 #include "glm/glm.hpp"
+#include "memoryUtils.h"
 #include "utilities.h"
 #include "sceneStructs.h"
 #include "bvh.h"
+#include "materials.h"
 using namespace std;
+
+struct MaterialLoadJobInfo
+{
+    std::string type;
+    MaterialParams params;
+};
 
 class Scene {
 private:
@@ -25,7 +33,8 @@ private:
 public:
     void buildBVH();
     void buildStacklessBVH();
-    void LoadAllTextures(); 
+    void LoadAllTexturesToGPU(); 
+    void LoadAllMaterialsToGPU(Allocator alloc);
     void CreateLights();
     Scene(string filename);
     ~Scene();
@@ -50,7 +59,8 @@ public:
     std::vector<cudaArray*> textureDataPtrs;
     std::unordered_map< std::string, cudaTextureObject_t> strToTextureObj;
     std::vector<std::pair<std::string, int> > LoadTextureFromFileJobs;//texture path, materialID
-    std::vector <GLTFTextureLoadInfo> LoadTextureFromMemoryJobs;
+    std::vector<GLTFTextureLoadInfo> LoadTextureFromMemoryJobs;
+    std::vector<MaterialLoadJobInfo>  LoadMaterialJobs;
 };
 
 struct MikkTSpaceHelper

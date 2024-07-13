@@ -87,6 +87,11 @@ __device__ inline glm::vec3 util_math_fschlick(glm::vec3 f0, float HoV)
 	return f0 + (1.0f - f0) * util_math_pow_5(1.0f - HoV);
 }
 
+__device__ inline SampledSpectrum util_math_fr_complex(float MoV, const SampledSpectrum& eta, const SampledSpectrum& k)
+{
+
+}
+
 __device__ float util_math_lambda(glm::vec3 w, float a2) {
 	float cos2Theta = w.z * w.z;
 	float sin2Theta = 1 - cos2Theta;
@@ -96,8 +101,8 @@ __device__ float util_math_lambda(glm::vec3 w, float a2) {
 	return (sqrt(1 + a2 * tan2Theta) - 1) / 2;
 }
 
-//__device__ FrComplex(Float cosTheta_i, pstd::complex<Float> eta) {
-//	using Complex = pstd::complex<Float>;
+//__device__ FrComplex(float cosTheta_i, pstd::complex<float> eta) {
+//	using Complex = pstd::complex<float>;
 //	cosTheta_i = Clamp(cosTheta_i, 0, 1);
 //	<< Compute complex  for Fresnel equations using Snell¡¯s law >>
 //		Complex r_parl = (eta* cosTheta_i - cosTheta_t) /
@@ -450,97 +455,97 @@ __device__ float lights_sample_pdf(const SceneInfoDev& sceneInfo, int lightPrimI
 	}
 }
 
-__device__ void lights_sample(const SceneInfoDev& sceneInfo, const glm::vec3& random, const glm::vec3& position, const glm::vec3& normal, glm::vec3* lightPos, glm::vec3* lightNormal, glm::vec3* emissive, float* pdf)
-{
-	if (!sceneInfo.lightsSize) return;
-	float fchosen = random.x * sceneInfo.lightsSize;
-	int chosenLight = std::floor(fchosen);
-	float u = glm::clamp(fchosen - (int)fchosen, 0.0f, 1.0f);
-	Primitive& lightPrim = sceneInfo.dev_lights[chosenLight];
-	Object& lightObj = sceneInfo.dev_objs[lightPrim.objID];
-	Material& lightMat = sceneInfo.dev_materials[lightObj.materialid];
-	float prob = 1.0f / sceneInfo.lightsSize;
-	if (lightObj.type == GeomType::SPHERE)//Assume uniform scale of xyz
-	{
-		glm::vec3 originWorld = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0.0), 1.0f));
-		glm::vec3 rWorld = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0.5, 0.0, 0.0), 0.0f));
-		float R = glm::length(rWorld);
-		glm::vec3 localSample = util_sample_hemisphere_uniform(glm::vec2(random.y, random.z));
-		glm::vec3 N = glm::normalize(position - originWorld);
-		glm::vec3 T, B;
-		util_math_get_TBN_pixar(N, &T, &B);
-		*lightNormal = glm::normalize(glm::mat3(T, B, N) * localSample);
-		*lightPos = originWorld + *lightNormal * R;
-		prob /= (TWO_PI * R * R);
-	}
-	else if(lightObj.type == GeomType::CUBE)//TODO: use quad light to replace all cubes
-	{
-		glm::vec3 v0 = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(-0.5f, -0.5f, -0.5f), 1.0f));
-		glm::vec3 vx = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(1,0,0), 0.0f));
-		glm::vec3 vy = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0,1,0), 0.0f));
-		glm::vec3 vz = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0,0,1), 0.0f));
-
-		float Axy = abs(glm::length(glm::cross(vx, vy)));
-		float Axz = abs(glm::length(glm::cross(vx, vz)));
-		float Ayz = abs(glm::length(glm::cross(vy, vz)));
-		float area = 2 * (Axy + Axz + Ayz);
-		prob /= area;
-		float s = u * area;
-		double limit = Axy;
-		float i = random.y, j = random.z;
-		if (s < limit) {
-			*lightPos = v0 + vx * i + vy * j;
-			*lightNormal = glm::normalize(-vz);
-		}
-		else if (s < (limit += Axy)) {
-			*lightPos = v0 + vz + vx * i + vy * j;
-			*lightNormal = glm::normalize(vz);
-		}
-		else if (s < (limit += Axz)) {
-			*lightPos = v0 + vx * i + vz * j;
-			*lightNormal = glm::normalize(-vy);
-		}
-		else if (s < (limit += Axz)) {
-			*lightPos = v0 + vy + vx * i + vz * j;
-			*lightNormal = glm::normalize(vy);
-		}
-		else if (s < (limit += Ayz)) {
-			*lightPos = v0 + vy * i + vz * j;
-			*lightNormal = glm::normalize(-vx);
-		}
-		else {
-			*lightPos = v0 + vx + vy * i + vz * j;
-			*lightNormal = glm::normalize(vx);
-		}
-	}
-	else //Triangle
-	{
-		glm::ivec3 tri = sceneInfo.modelInfo.dev_triangles[lightObj.triangleStart + lightPrim.offset];
-		glm::vec2 bary = util_math_uniform_sample_triangle(glm::vec2(random.y, random.z));
-		const glm::vec3& v0 = sceneInfo.modelInfo.dev_vertices[tri[0]];
-		const glm::vec3& v1 = sceneInfo.modelInfo.dev_vertices[tri[1]];
-		const glm::vec3& v2 = sceneInfo.modelInfo.dev_vertices[tri[2]];
-		glm::vec3 v0w = multiplyMV(lightObj.Transform.transform, glm::vec4(v0, 1.0f));
-		glm::vec3 v1w = multiplyMV(lightObj.Transform.transform, glm::vec4(v1, 1.0f));
-		glm::vec3 v2w = multiplyMV(lightObj.Transform.transform, glm::vec4(v2, 1.0f));
-		*lightPos = v0w * bary[0] + v1w * bary[1] + v2w * (1 - bary[0] - bary[1]);
-		glm::vec3 nNormal = glm::cross(v1w - v0w, v2w - v0w);
-		float area = abs(glm::length(nNormal)) / 2;
-		*lightNormal = nNormal / (area > 0.0 ? area : 1e-8f);
-		prob /= area;
-	}
-	bool vis = glm::dot(position - *lightPos, *lightNormal) > 0;
-	vis = vis && glm::dot(*lightPos - position, normal) > 0;
-	glm::vec3 shadowRayOri = position;
-	//shadowRayOri += glm::dot(*lightPos - position, normal) > 0.0 ? normal * 0.00001f : -normal * 0.00001f;
-#if USE_BVH
-	vis = vis && util_bvh_test_visibility(shadowRayOri, *lightPos, sceneInfo);
-#else
-	vis = vis && util_test_visibility(shadowRayOri, *lightPos, sceneInfo);
-#endif
-	
-	*pdf = prob;
-	*emissive = vis ? lightMat.emittance * lightMat.color : glm::vec3(0);
-}
+//__device__ void lights_sample(const SceneInfoDev& sceneInfo, const glm::vec3& random, const glm::vec3& position, const glm::vec3& normal, glm::vec3* lightPos, glm::vec3* lightNormal, glm::vec3* emissive, float* pdf)
+//{
+//	if (!sceneInfo.lightsSize) return;
+//	float fchosen = random.x * sceneInfo.lightsSize;
+//	int chosenLight = std::floor(fchosen);
+//	float u = glm::clamp(fchosen - (int)fchosen, 0.0f, 1.0f);
+//	Primitive& lightPrim = sceneInfo.dev_lights[chosenLight];
+//	Object& lightObj = sceneInfo.dev_objs[lightPrim.objID];
+//	Material& lightMat = sceneInfo.dev_materials[lightObj.materialid];
+//	float prob = 1.0f / sceneInfo.lightsSize;
+//	if (lightObj.type == GeomType::SPHERE)//Assume uniform scale of xyz
+//	{
+//		glm::vec3 originWorld = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0.0), 1.0f));
+//		glm::vec3 rWorld = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0.5, 0.0, 0.0), 0.0f));
+//		float R = glm::length(rWorld);
+//		glm::vec3 localSample = util_sample_hemisphere_uniform(glm::vec2(random.y, random.z));
+//		glm::vec3 N = glm::normalize(position - originWorld);
+//		glm::vec3 T, B;
+//		util_math_get_TBN_pixar(N, &T, &B);
+//		*lightNormal = glm::normalize(glm::mat3(T, B, N) * localSample);
+//		*lightPos = originWorld + *lightNormal * R;
+//		prob /= (TWO_PI * R * R);
+//	}
+//	else if(lightObj.type == GeomType::CUBE)//TODO: use quad light to replace all cubes
+//	{
+//		glm::vec3 v0 = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(-0.5f, -0.5f, -0.5f), 1.0f));
+//		glm::vec3 vx = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(1,0,0), 0.0f));
+//		glm::vec3 vy = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0,1,0), 0.0f));
+//		glm::vec3 vz = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0,0,1), 0.0f));
+//
+//		float Axy = abs(glm::length(glm::cross(vx, vy)));
+//		float Axz = abs(glm::length(glm::cross(vx, vz)));
+//		float Ayz = abs(glm::length(glm::cross(vy, vz)));
+//		float area = 2 * (Axy + Axz + Ayz);
+//		prob /= area;
+//		float s = u * area;
+//		double limit = Axy;
+//		float i = random.y, j = random.z;
+//		if (s < limit) {
+//			*lightPos = v0 + vx * i + vy * j;
+//			*lightNormal = glm::normalize(-vz);
+//		}
+//		else if (s < (limit += Axy)) {
+//			*lightPos = v0 + vz + vx * i + vy * j;
+//			*lightNormal = glm::normalize(vz);
+//		}
+//		else if (s < (limit += Axz)) {
+//			*lightPos = v0 + vx * i + vz * j;
+//			*lightNormal = glm::normalize(-vy);
+//		}
+//		else if (s < (limit += Axz)) {
+//			*lightPos = v0 + vy + vx * i + vz * j;
+//			*lightNormal = glm::normalize(vy);
+//		}
+//		else if (s < (limit += Ayz)) {
+//			*lightPos = v0 + vy * i + vz * j;
+//			*lightNormal = glm::normalize(-vx);
+//		}
+//		else {
+//			*lightPos = v0 + vx + vy * i + vz * j;
+//			*lightNormal = glm::normalize(vx);
+//		}
+//	}
+//	else //Triangle
+//	{
+//		glm::ivec3 tri = sceneInfo.modelInfo.dev_triangles[lightObj.triangleStart + lightPrim.offset];
+//		glm::vec2 bary = util_math_uniform_sample_triangle(glm::vec2(random.y, random.z));
+//		const glm::vec3& v0 = sceneInfo.modelInfo.dev_vertices[tri[0]];
+//		const glm::vec3& v1 = sceneInfo.modelInfo.dev_vertices[tri[1]];
+//		const glm::vec3& v2 = sceneInfo.modelInfo.dev_vertices[tri[2]];
+//		glm::vec3 v0w = multiplyMV(lightObj.Transform.transform, glm::vec4(v0, 1.0f));
+//		glm::vec3 v1w = multiplyMV(lightObj.Transform.transform, glm::vec4(v1, 1.0f));
+//		glm::vec3 v2w = multiplyMV(lightObj.Transform.transform, glm::vec4(v2, 1.0f));
+//		*lightPos = v0w * bary[0] + v1w * bary[1] + v2w * (1 - bary[0] - bary[1]);
+//		glm::vec3 nNormal = glm::cross(v1w - v0w, v2w - v0w);
+//		float area = abs(glm::length(nNormal)) / 2;
+//		*lightNormal = nNormal / (area > 0.0 ? area : 1e-8f);
+//		prob /= area;
+//	}
+//	bool vis = glm::dot(position - *lightPos, *lightNormal) > 0;
+//	vis = vis && glm::dot(*lightPos - position, normal) > 0;
+//	glm::vec3 shadowRayOri = position;
+//	//shadowRayOri += glm::dot(*lightPos - position, normal) > 0.0 ? normal * 0.00001f : -normal * 0.00001f;
+//#if USE_BVH
+//	vis = vis && util_bvh_test_visibility(shadowRayOri, *lightPos, sceneInfo);
+//#else
+//	vis = vis && util_test_visibility(shadowRayOri, *lightPos, sceneInfo);
+//#endif
+//	
+//	*pdf = prob;
+//	*emissive = vis ? lightMat.emittance * lightMat.color : glm::vec3(0);
+//}
 
 

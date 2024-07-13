@@ -9,7 +9,7 @@ EMITTANCE   0
 
 // Camera
 CAMERA
-RES         1080 1080
+RES         1440 1440
 FOVY        45
 ITERATIONS  10000
 DEPTH       8
@@ -21,7 +21,7 @@ UP          0 1 0
 // Model
 OBJECT 0
 model fnormal ../scenes/models/bunny_large.obj
-material -1
+material 0
 TRANS       0 0.7 0
 ROTAT       0 0 0
 SCALE       5 5 5

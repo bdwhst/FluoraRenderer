@@ -17,6 +17,13 @@ Command line arguments: `.\cis565_path_tracer.exe scenefile.txt`
 | :------------------------------------: |
 |         ![](./img/chess0.png)          |
 
+| Spectral Varying IOR vs Constant IOR |
+| ------------------------------------ |
+| ![](./img/dragon_spec_1.png)         |
+| ![](./img/dragon_spec_0.png)         |
+
+
+
 | [SIGGRAPH-2023 Microfacet theory for non-uniform heightfields: Asymmetrically Blend of Microfacet NDF (Conductor And Dielectric)](https://research.nvidia.com/labs/rtr/microfacet-theory-non-uniform-heightfields/) |
 | :----------------------------------------------------------: |
 |                ![](./img/asym_conductor.png)                 |

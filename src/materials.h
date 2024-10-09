@@ -168,7 +168,8 @@ public:
 		SampledSpectrum sampledK = k.sample(info.swl);
 		bxdfPtr->eta = sampledEta;
 		bxdfPtr->k = sampledK;
-		bxdfPtr->roughness = roughness;
+		bxdfPtr->dist.alpha_x = roughness;
+		bxdfPtr->dist.alpha_y = roughness;
 		return bxdfPtr;
 	}
 private:
@@ -205,4 +206,4 @@ private:
 	RGBColorSpace* colorSpace;
 };
 
-constexpr uint32_t BxDFMaxSize = std::max({ sizeof(DiffuseBxDF), sizeof(DielectricBxDF), sizeof(ConductorMaterial), sizeof(EmissiveMaterial)});
+constexpr uint32_t BxDFMaxSize = std::max({ sizeof(DiffuseBxDF), sizeof(DielectricBxDF), sizeof(ConductorBxDF)});

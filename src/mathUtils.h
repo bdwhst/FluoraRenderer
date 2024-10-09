@@ -11,18 +11,23 @@
 
 namespace math
 {
-    __device__ __host__ __inline__ bool is_nan(float x)
+    constexpr float pi = 3.141592653589793f;
+    constexpr float two_pi = pi * 2.0f;
+    __device__ __host__ inline bool is_nan(float x)
     {
         return x != x;
     }
 
     template<typename T>
-    __device__ __host__ float lerp(T x, T a, T b)
+    __device__ __host__ inline float lerp(T x, T a, T b)
     {
         return (1 - x) * a + x * b;
     }
     template<typename T>
-    __device__ __host__ float sqr(T x){ return x*x; }
+    __device__ __host__ inline float sqr(T x){ return x*x; }
+
+    template<typename T>
+    __device__ __host__ inline float abs(T x) { return std::abs(x); }
 
     template <typename T, typename U, typename V>
     __device__ __host__ inline constexpr T clamp(T val, U low, V high) {
@@ -36,7 +41,7 @@ namespace math
     //find position i such that f returns true for all position less or equal to i
     //such that f returns false for all position greater than i
     template <typename F>
-    __device__ __host__ __inline__ size_t find_interval(size_t sz, const F& f)
+    __device__ __host__ inline size_t find_interval(size_t sz, const F& f)
     {
         using ssize_t = std::make_signed_t<size_t>;
         ssize_t size = (ssize_t)sz - 2, first = 1;
@@ -313,6 +318,174 @@ namespace math
         return true;
     }
 
+    __device__ inline float l2norm_squared(const glm::vec3& v)
+    {
+        return v.x * v.x + v.y * v.y + v.z * v.z;
+    }
+    __device__ inline float l2norm_squared(const glm::vec2& v)
+    {
+        return v.x * v.x + v.y * v.y;
+    }
+    __device__ inline float dist2(const glm::vec3& v0, const glm::vec3& v1)
+    {
+        return l2norm_squared(v0 - v1);
+    }
+    __device__ inline float sin_cos_convert(float sincos)
+    {
+        return sqrtf(fmaxf(0.0f, 1.0f - sqr(sincos)));
+    }
 
+    __device__ inline float cos_theta_vec(const glm::vec3& v)
+    {
+        return v.z;
+    }
+    __device__ inline float cos2_theta_vec(const glm::vec3& v)
+    {
+        return v.z * v.z;
+    }
+    __device__ inline float sin2_theta_vec(const glm::vec3& v)
+    {
+        return fmaxf(0.0f, 1.0f - cos2_theta_vec(v));
+    }
+    __device__ inline float sin_theta_vec(const glm::vec3& v)
+    {
+        return sqrtf(sin2_theta_vec(v));
+    }
+    __device__ inline float tan2_theta_vec(const glm::vec3& v)
+    {
+        return sin2_theta_vec(v) / cos2_theta_vec(v);
+    }
+    __device__ inline float cos_phi_vec(const glm::vec3& v)
+    {
+        float sintheta = sin_theta_vec(v);
+        return sintheta == 0 ? 1 : clamp(v.x / sintheta, -1.0f, 1.0f);
+    }
+    __device__ inline float sin_phi_vec(const glm::vec3& v)
+    {
+        float sintheta = sin_theta_vec(v);
+        return sintheta == 0 ? 1 : clamp(v.y / sintheta, -1.0f, 1.0f);
+    }
+
+    template<typename T>
+    __device__ inline bool is_inf(T x)
+    {
+        return isinf(x);
+    }
+
+    __device__ inline float abs_dot(const glm::vec3& w0, const glm::vec3& w1)
+    {
+        return abs(glm::dot(w0, w1));
+    }
+
+
+    template <typename T>
+    struct complex {
+        __device__ __host__ complex(T re) : re(re), im(0) {}
+        __device__ __host__  complex(T re, T im) : re(re), im(im) {}
+
+        __device__ __host__  complex operator-() const { return { -re, -im }; }
+
+        __device__ __host__  complex operator+(complex z) const { return { re + z.re, im + z.im }; }
+
+        __device__ __host__  complex operator-(complex z) const { return { re - z.re, im - z.im }; }
+
+        __device__ __host__  complex operator*(complex z) const {
+            return { re * z.re - im * z.im, re * z.im + im * z.re };
+        }
+
+        __device__ __host__  complex operator/(complex z) const {
+            T scale = 1 / (z.re * z.re + z.im * z.im);
+            return { scale * (re * z.re + im * z.im), scale * (im * z.re - re * z.im) };
+        }
+
+        friend __device__ __host__  complex operator+(T value, complex z) {
+            return complex(value) + z;
+        }
+
+        friend __device__ __host__  complex operator-(T value, complex z) {
+            return complex(value) - z;
+        }
+
+        friend __device__ __host__  complex operator*(T value, complex z) {
+            return complex(value) * z;
+        }
+
+        friend __device__ __host__  complex operator/(T value, complex z) {
+            return complex(value) / z;
+        }
+
+        T re, im;
+    };
+
+    template<typename T>
+    __device__ __host__ complex<T> sqr(const complex<T>& z) { return z * z; }
+
+    template <typename T>
+    __device__ __host__  T norm(const complex<T>& z) {
+        return z.re * z.re + z.im * z.im;
+    }
+
+    template <typename T>
+    __device__ __host__  T abs(const complex<T>& z) {
+        return sqrtf(norm(z));
+    }
+
+    template <typename T>
+    __device__ __host__ complex<T> sqrt(const complex<T>& z) {
+        T n = abs(z), t1 = sqrtf(T(.5) * (n + abs(z.re))),
+            t2 = T(.5) * z.im / t1;
+
+        if (n == 0)
+            return 0;
+
+        if (z.re >= 0)
+            return { t1, t2 };
+        else
+            return { abs(t2), copysignf(t1, z.im) };
+    }
+    __device__ glm::vec2 sample_uniform_disk_polar(const glm::vec2& u);
+    __device__ inline glm::vec3 reflect(const glm::vec3& wo, const glm::vec3& n)
+    {
+        return -wo + 2 * glm::dot(wo, n) * n;
+    }
+    __device__ inline bool sample_hemisphere(const glm::vec3& w1, const glm::vec3& w2)
+    {
+        return w1.z * w2.z > 0;
+    }
+
+    __device__ inline glm::vec2 sample_disk_uniform(const glm::vec2& random)
+    {
+        float r = sqrtf(random.x);
+        float theta = two_pi * random.y;
+        return glm::vec2(r * cos(theta), r * sin(theta));
+    }
+
+    __device__ inline glm::vec3 sample_hemisphere_cosine(const glm::vec2& random)
+    {
+        glm::vec2 t = sample_disk_uniform(random);
+        return glm::vec3(t.x, t.y, sqrtf(1 - t.x * t.x - t.y * t.y));
+    }
+
+    __device__ inline float frensel_dielectric(float cosThetaI, float etaI, float etaT)
+    {
+        float sinThetaI = sin_cos_convert(cosThetaI);
+        float sinThetaT = etaI / etaT * sinThetaI;
+        if (sinThetaT >= 1) return 1;//total reflection
+        float cosThetaT = sin_cos_convert(sinThetaT);
+        float rparll = ((etaT * cosThetaI) - (etaI * cosThetaT)) / ((etaT * cosThetaI) + (etaI * cosThetaT));
+        float rperpe = ((etaI * cosThetaI) - (etaT * cosThetaT)) / ((etaI * cosThetaI) + (etaT * cosThetaT));
+        return (rparll * rparll + rperpe * rperpe) * 0.5;
+    }
+
+    __device__ inline bool geomerty_refract(const glm::vec3& wi, const glm::vec3& n, float eta, glm::vec3* wt)
+    {
+        float cosThetaI = glm::dot(wi, n);
+        float sin2ThetaI = fmaxf(0.0f, 1 - cosThetaI * cosThetaI);
+        float sin2ThetaT = eta * eta * sin2ThetaI;
+        if (sin2ThetaT >= 1) return false;
+        float cosThetaT = sqrtf(1 - sin2ThetaT);
+        *wt = eta * (-wi) + (eta * cosThetaI - cosThetaT) * n;
+        return true;
+    }
 };
 

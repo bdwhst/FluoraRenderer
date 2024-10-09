@@ -1,5 +1,6 @@
 #pragma once
 #include <thrust/random.h>
+#include <glm/glm.hpp>
 /**
  * Handy-dandy hash function that provides seeds for random number generation.
  */
@@ -13,8 +14,14 @@ __device__ inline unsigned int utilhash(unsigned int a) {
     return a;
 }
 
-__device__
+__device__ inline
 thrust::default_random_engine makeSeededRandomEngine(int iter, int index, int depth) {
     int h = utilhash((1 << 31) | (depth << 22) | iter) ^ utilhash(index);
     return thrust::default_random_engine(h);
+}
+
+__device__ inline glm::vec2 util_sample2D(thrust::default_random_engine& rng)
+{
+	thrust::uniform_real_distribution<float> u01(0, 1);;
+	return glm::vec2(u01(rng), u01(rng));
 }

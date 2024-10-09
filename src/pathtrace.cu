@@ -16,7 +16,6 @@
 #include "pathtrace.h"
 #include "intersections.h"
 #include "interactions.h"
-#include "microfacet.h"
 //#include "materials.h"
 
 
@@ -116,7 +115,7 @@ void pathtraceInit(Scene* scene, Allocator alloc) {
 	cudaMalloc(&dev_image, pixelcount * sizeof(glm::vec3));
 	cudaMemset(dev_image, 0, pixelcount * sizeof(glm::vec3));
 
-	dev_film = alloc.new_object<RGBFilm>(dev_image, RGBColorSpace::sRGB, 30.0f);
+	dev_film = alloc.new_object<RGBFilm>(dev_image, RGBColorSpace::sRGB, 10.0f);
 
 	cudaMalloc(&dev_paths1, pixelcount * sizeof(PathSegment));
 	cudaMalloc(&dev_paths2, pixelcount * sizeof(PathSegment));

@@ -1,0 +1,30 @@
+// Glass
+MATERIAL 0
+TYPE conductor
+ROUGHNESS   0.01
+REFRIOR_REAL_NAMED metal-Ag-eta
+REFRIOR_IMAG_NAMED metal-Ag-k
+
+// Camera
+CAMERA
+RES         1920 1300
+FOVY        45
+ITERATIONS  10000
+DEPTH       8
+FILE        dragon
+EYE         0.0 5 10.5
+LOOKAT      0 5 0
+UP          0 1 0
+
+// Model
+OBJECT 0
+model vnormal ../scenes/models/dragon.obj
+material 0
+TRANS       -1 5 0
+ROTAT       0 90 0
+SCALE       18 18 18
+
+
+SKYBOX
+../scenes/environment/pine_attic_4k.hdr
+

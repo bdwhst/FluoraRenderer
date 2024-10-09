@@ -384,8 +384,10 @@ public:
     static constexpr unsigned int TypeIndex() 
     {
         using Tp = typename std::remove_cv_t<T>;
-        if constexpr (std::is_same_v<Tp, std::nullptr_t>) return 0;
-        else return 1 + IndexOf<Tp, Types>::count;
+        if constexpr (std::is_same_v<Tp, std::nullptr_t>) 
+            return 0;
+        else 
+            return 1 + IndexOf<Tp, Types>::count;
     }
 
     template <typename T>
@@ -414,6 +416,8 @@ public:
     template <typename T>
     __device__ __host__ bool Is() const { return Tag() == TypeIndex<T>(); }
     static constexpr unsigned int MaxTag() { return sizeof...(Ts); }
+    __device__ __host__
+    static constexpr unsigned int NumTags() { return MaxTag() + 1; }
     
 
     template <typename T>
@@ -429,8 +433,10 @@ public:
     template <typename T>
     __device__ __host__ T *CastOrNullptr()
     {
-        if (Is<T>()) return reinterpret_cast<T *>(ptr());
-        else return nullptr;
+        if (Is<T>()) 
+            return reinterpret_cast<T *>(ptr());
+        else 
+            return nullptr;
     }
     template <typename T>
     __device__ __host__ const T *CastOrNullptr() const

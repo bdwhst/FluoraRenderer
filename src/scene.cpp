@@ -113,7 +113,7 @@ void Scene::LoadAllMaterialsToGPU(Allocator alloc)
 {
     for (auto& job : LoadMaterialJobs)
     {
-        if (job.type == "dielectric")
+        if (job.type == "dielectric" || job.type == "conductor")
         {
             if (job.params.get_string("eta") != std::string())
             {
@@ -129,6 +129,22 @@ void Scene::LoadAllMaterialsToGPU(Allocator alloc)
             {
                 float eta = job.params.get_float("eta");
                 job.params.insert_spectrum("eta", alloc.new_object<ConstantSpectrum>(eta));
+            }
+
+            if (job.params.get_string("k") != std::string())
+            {
+                Spectrum k = spec::get_named_spectrum(job.params.get_string("k"));
+                job.params.insert_spectrum("k", k);
+            }
+            else if (job.params.get_vec3("k") != glm::vec3(0.0f))
+            {
+                glm::vec3 k = job.params.get_vec3("k");
+                job.params.insert_spectrum("k", alloc.new_object<RGBUnboundedSpectrum>(*RGBColorSpace::ACES2065_1, k));
+            }
+            else if (job.params.get_float("k") != 0.0f)
+            {
+                float k = job.params.get_float("k");
+                job.params.insert_spectrum("k", alloc.new_object<ConstantSpectrum>(k));
             }
         }
         job.params.insert_ptr("colorSpace", RGBColorSpace::sRGB);
@@ -992,6 +1008,14 @@ int Scene::loadMaterial(string materialid) {
                 glm::vec3 color(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
                 params.insert_vec3("eta", color);
                 //params.insert_spectrum("eta", alloc.new_object<RGBUnboundedSpectrum>(*RGBColorSpace::sRGB, color));
+            }
+            else if (strcmp(tokens[0].c_str(), "REFRIOR_REAL_NAMED") == 0)
+            {
+                params.insert_string("eta", tokens[1]);
+            }
+            else if (strcmp(tokens[0].c_str(), "REFRIOR_IMAG_NAMED") == 0)
+            {
+                params.insert_string("k", tokens[1]);
             }
             else if (strcmp(tokens[0].c_str(), "EMITTANCE") == 0) {
                 float emittance = atof(tokens[1].c_str());

@@ -87,12 +87,8 @@ __device__ inline glm::vec3 util_math_fschlick(glm::vec3 f0, float HoV)
 	return f0 + (1.0f - f0) * util_math_pow_5(1.0f - HoV);
 }
 
-__device__ inline SampledSpectrum util_math_fr_complex(float MoV, const SampledSpectrum& eta, const SampledSpectrum& k)
-{
 
-}
-
-__device__ float util_math_lambda(glm::vec3 w, float a2) {
+__device__ inline float util_math_lambda(glm::vec3 w, float a2) {
 	float cos2Theta = w.z * w.z;
 	float sin2Theta = 1 - cos2Theta;
 	if (cos2Theta<1e-9) return 0;
@@ -195,45 +191,45 @@ __device__ inline glm::vec3 bxdf_diffuse_sample(const glm::vec2& random, const g
 	return util_sample_hemisphere_cosine(random);
 }
 
-__device__ glm::vec3 bxdf_diffuse_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec2& random, float* pdf, glm::vec3 diffuseAlbedo)
+__device__ inline glm::vec3 bxdf_diffuse_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec2& random, float* pdf, glm::vec3 diffuseAlbedo)
 {
 	*wi = util_sample_hemisphere_cosine(random);
 	*pdf = util_math_tangent_space_clampedcos(*wi) * INV_PI;
 	return diffuseAlbedo * INV_PI;
 }
 
-__device__ glm::vec3 bxdf_frensel_specular_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec2& random, float* pdf, glm::vec3 reflectionAlbedo, glm::vec3 refractionAlbedo, glm::vec2 refIdx)
-{
-	float frensel = util_math_frensel_dielectric(abs(wo.z), refIdx.x, refIdx.y);
-	if (random.x < frensel)
-	{
-		*wi = glm::vec3(-wo.x, -wo.y, wo.z);
-		*pdf = frensel;
-		return frensel * reflectionAlbedo;
-	}
-	else
-	{
-		glm::vec3 n = glm::dot(wo, glm::vec3(0, 0, 1)) > 0 ? glm::vec3(0, 0, 1) : glm::vec3(0, 0, -1);
-		glm::vec3 refractedRay;
-		if (!util_geomerty_refract(wo, n, refIdx.x / refIdx.y, &refractedRay)) return glm::vec3(0);
-		*wi = refractedRay;
-		*pdf = 1 - frensel;
-		glm::vec3 val = refractionAlbedo * (1 - frensel) * (refIdx.x * refIdx.x) / (refIdx.y * refIdx.y);
-		return val;
-	}
-}
+//__device__ glm::vec3 bxdf_frensel_specular_sample_f(const glm::vec3& wo, glm::vec3* wi, const glm::vec2& random, float* pdf, glm::vec3 reflectionAlbedo, glm::vec3 refractionAlbedo, glm::vec2 refIdx)
+//{
+//	float frensel = util_math_frensel_dielectric(abs(wo.z), refIdx.x, refIdx.y);
+//	if (random.x < frensel)
+//	{
+//		*wi = glm::vec3(-wo.x, -wo.y, wo.z);
+//		*pdf = frensel;
+//		return frensel * reflectionAlbedo;
+//	}
+//	else
+//	{
+//		glm::vec3 n = glm::dot(wo, glm::vec3(0, 0, 1)) > 0 ? glm::vec3(0, 0, 1) : glm::vec3(0, 0, -1);
+//		glm::vec3 refractedRay;
+//		if (!util_geomerty_refract(wo, n, refIdx.x / refIdx.y, &refractedRay)) return glm::vec3(0);
+//		*wi = refractedRay;
+//		*pdf = 1 - frensel;
+//		glm::vec3 val = refractionAlbedo * (1 - frensel) * (refIdx.x * refIdx.x) / (refIdx.y * refIdx.y);
+//		return val;
+//	}
+//}
 
-__device__ glm::vec3 bxdf_perfect_specular_sample_f(const glm::vec3& wo, glm::vec3* wi, float* pdf, glm::vec3 reflectionAlbedo)
-{
-	*wi = glm::vec3(-wo.x, -wo.y, wo.z);
-	*pdf = 1;
-	return reflectionAlbedo / util_math_tangent_space_clampedcos(wo);
-}
+//__device__ glm::vec3 bxdf_perfect_specular_sample_f(const glm::vec3& wo, glm::vec3* wi, float* pdf, glm::vec3 reflectionAlbedo)
+//{
+//	*wi = glm::vec3(-wo.x, -wo.y, wo.z);
+//	*pdf = 1;
+//	return reflectionAlbedo / util_math_tangent_space_clampedcos(wo);
+//}
 
 __device__ inline glm::vec3 bxdf_microfacet_eval(const glm::vec3& wo, const glm::vec3& wi, const glm::vec3& baseColor, float roughness)
 {
 	glm::vec3 wh = wo + wi;
-	if (glm::l2Norm(wh) < 1e-9f) return glm::vec3(0);
+	if (math::l2norm_squared(wh) < 1e-9f) return glm::vec3(0);
 	wh = glm::normalize(wh);
 	if (wi.z > 0.0f && glm::dot(wh, wi) > 0.0f)
 	{
@@ -383,17 +379,13 @@ __device__ inline glm::vec3 bxdf_blinn_phong_sample_f(const glm::vec3& wo, glm::
 	return bxdf_blinn_phong_eval(wo, *wi, baseColor, specExponent);
 }
 
-__device__ glm::vec2 util_math_uniform_sample_triangle(const glm::vec2& rand)
-{
-	float t = sqrt(rand.x);
-	return glm::vec2(1 - t, t * rand.y);
-}
+
 
 //See (Veach 1997 (8.10)) 
 __device__ inline float util_math_solid_angle_to_area(glm::vec3 surfacePos, glm::vec3 surfaceNormal, glm::vec3 receivePos)
 {
 	glm::vec3 L = receivePos - surfacePos;
-	return glm::max(glm::dot(glm::normalize(L), surfaceNormal),0.0f) / glm::distance2(surfacePos, receivePos);
+	return glm::max(glm::dot(glm::normalize(L), surfaceNormal),0.0f) / math::dist2(surfacePos, receivePos);
 }
 
 
@@ -417,43 +409,43 @@ __device__ inline float util_mis_weight(float pdf1, float pdf2)
 #endif
 }
 
-__device__ float lights_sample_pdf(const SceneInfoDev& sceneInfo, int lightPrimID)
-{
-	if(!sceneInfo.lightsSize) return -1;
-	float prob = 1.0 / sceneInfo.lightsSize;
-	Primitive& lightPrim = sceneInfo.dev_primitives[lightPrimID];
-	Object& lightObj = sceneInfo.dev_objs[lightPrim.objID];
-	if (lightObj.type == GeomType::SPHERE)
-	{
-		glm::vec3 rWorld = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0.5, 0.0, 0.0), 0.0f));
-		float R = glm::length(rWorld);
-		return prob / (TWO_PI * R * R);
-	}
-	else if(lightObj.type == GeomType::CUBE)
-	{
-		glm::vec3 vx = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(1, 0, 0), 0.0f));
-		glm::vec3 vy = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0, 1, 0), 0.0f));
-		glm::vec3 vz = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0, 0, 1), 0.0f));
-		float Axy = abs(glm::length(glm::cross(vx, vy)));
-		float Axz = abs(glm::length(glm::cross(vx, vz)));
-		float Ayz = abs(glm::length(glm::cross(vy, vz)));
-		float area = 2 * (Axy + Axz + Ayz);
-		return prob / area;
-	}
-	else
-	{
-		glm::ivec3 tri = sceneInfo.modelInfo.dev_triangles[lightObj.triangleStart + lightPrim.offset];
-		const glm::vec3& v0 = sceneInfo.modelInfo.dev_vertices[tri[0]];
-		const glm::vec3& v1 = sceneInfo.modelInfo.dev_vertices[tri[1]];
-		const glm::vec3& v2 = sceneInfo.modelInfo.dev_vertices[tri[2]];
-		glm::vec3 v0w = multiplyMV(lightObj.Transform.transform, glm::vec4(v0, 1.0f));
-		glm::vec3 v1w = multiplyMV(lightObj.Transform.transform, glm::vec4(v1, 1.0f));
-		glm::vec3 v2w = multiplyMV(lightObj.Transform.transform, glm::vec4(v2, 1.0f));
-		glm::vec3 nNormal = glm::cross(v1w - v0w, v2w - v0w);
-		float area = abs(glm::length(nNormal)) / 2;
-		return prob / area;
-	}
-}
+//__device__ float lights_sample_pdf(const SceneInfoDev& sceneInfo, int lightPrimID)
+//{
+//	if(!sceneInfo.lightsSize) return -1;
+//	float prob = 1.0 / sceneInfo.lightsSize;
+//	Primitive& lightPrim = sceneInfo.dev_primitives[lightPrimID];
+//	Object& lightObj = sceneInfo.dev_objs[lightPrim.objID];
+//	if (lightObj.type == GeomType::SPHERE)
+//	{
+//		glm::vec3 rWorld = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0.5, 0.0, 0.0), 0.0f));
+//		float R = glm::length(rWorld);
+//		return prob / (TWO_PI * R * R);
+//	}
+//	else if(lightObj.type == GeomType::CUBE)
+//	{
+//		glm::vec3 vx = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(1, 0, 0), 0.0f));
+//		glm::vec3 vy = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0, 1, 0), 0.0f));
+//		glm::vec3 vz = multiplyMV(lightObj.Transform.transform, glm::vec4(glm::vec3(0, 0, 1), 0.0f));
+//		float Axy = abs(glm::length(glm::cross(vx, vy)));
+//		float Axz = abs(glm::length(glm::cross(vx, vz)));
+//		float Ayz = abs(glm::length(glm::cross(vy, vz)));
+//		float area = 2 * (Axy + Axz + Ayz);
+//		return prob / area;
+//	}
+//	else
+//	{
+//		glm::ivec3 tri = sceneInfo.modelInfo.dev_triangles[lightObj.triangleStart + lightPrim.offset];
+//		const glm::vec3& v0 = sceneInfo.modelInfo.dev_vertices[tri[0]];
+//		const glm::vec3& v1 = sceneInfo.modelInfo.dev_vertices[tri[1]];
+//		const glm::vec3& v2 = sceneInfo.modelInfo.dev_vertices[tri[2]];
+//		glm::vec3 v0w = multiplyMV(lightObj.Transform.transform, glm::vec4(v0, 1.0f));
+//		glm::vec3 v1w = multiplyMV(lightObj.Transform.transform, glm::vec4(v1, 1.0f));
+//		glm::vec3 v2w = multiplyMV(lightObj.Transform.transform, glm::vec4(v2, 1.0f));
+//		glm::vec3 nNormal = glm::cross(v1w - v0w, v2w - v0w);
+//		float area = abs(glm::length(nNormal)) / 2;
+//		return prob / area;
+//	}
+//}
 
 //__device__ void lights_sample(const SceneInfoDev& sceneInfo, const glm::vec3& random, const glm::vec3& position, const glm::vec3& normal, glm::vec3* lightPos, glm::vec3* lightNormal, glm::vec3* emissive, float* pdf)
 //{

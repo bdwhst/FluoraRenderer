@@ -83,11 +83,14 @@ set(sources
     src/pathtrace.cu
     src/camera.cu
     src/materials.cu
+    src/microfacet.cu
     src/scene.cpp
     src/preview.cpp
     src/utilities.cpp
     src/bvh.cpp
     src/spectrum.cu
+    src/intersections.cu
+    src/sampling.cu
 	src/mikktspace/mikktspace.c
     src/ImGui/imgui.cpp 
     src/ImGui/imgui_demo.cpp 

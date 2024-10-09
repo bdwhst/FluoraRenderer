@@ -7,6 +7,8 @@
 #include "utilities.h"
 #include "spectrum.h"
 
+#include "microfacet.h"
+
 class DiffuseBxDF;
 class DielectricBxDF;
 class ConductorBxDF;
@@ -50,10 +52,10 @@ public:
 class ConductorBxDF
 {
 public:
-    __host__ __device__ ConductorBxDF(const SampledSpectrum& eta, const SampledSpectrum& k, float roughness) :eta(eta), k(k), roughness(roughness) {}
+    __device__ ConductorBxDF(const SampledSpectrum& eta, const SampledSpectrum& k, float alpha_x, float alpha_y) :eta(eta), k(k), dist(alpha_x, alpha_y) {}
     __device__ SampledSpectrum sample_f(const glm::vec3& wo, glm::vec3& wi, float& pdf, thrust::default_random_engine& rng);
     __device__ SampledSpectrum eval(const glm::vec3& wo, const glm::vec3& wi, thrust::default_random_engine& rng);
     __device__ float pdf(const glm::vec3& wo, const glm::vec3& wi);
     SampledSpectrum eta, k;
-    float roughness;
+    TRDistribution dist;
 };

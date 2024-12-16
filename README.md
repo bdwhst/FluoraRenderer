@@ -17,6 +17,10 @@ Command line arguments: `.\Fluora.exe scenefile.txt`
 | :-----------------------------: |
 | ![](./img/ground_explosion.png) |
 
+|   Teapot Cloud (5000 spp)   |
+| :-------------------------: |
+| ![](./img/teapot_cloud.png) |
+
 | Wanna play chess? (1080*1080 10000spp) |
 | :------------------------------------: |
 |         ![](./img/chess0.png)          |

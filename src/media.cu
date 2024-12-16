@@ -343,7 +343,7 @@ __device__ SampledSpectrum NanoVDBMedium::Le(const glm::vec3& p, const SampledWa
 	nanovdb::Vec3<float> pIndex =
 		temperatureFloatGrid->worldToIndexF(nanovdb::Vec3<float>(p.x, p.y, p.z));
 	using Sampler = nanovdb::SampleFromVoxels<nanovdb::FloatGrid::TreeType, 1, false>;
-	volatile float temp = Sampler(temperatureFloatGrid->tree())(pIndex);
+	float temp = Sampler(temperatureFloatGrid->tree())(pIndex);
 	temp = (temp - temperature_offset) * temperature_scale;
 	if (temp <= 100.f)
 		return SampledSpectrum(0.f);

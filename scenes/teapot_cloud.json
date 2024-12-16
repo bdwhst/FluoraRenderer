@@ -1,12 +1,12 @@
 {
     "Camera":
     {
-        "RES":[1920,1080],
+        "RES":[2000,1440],
         "FOVY":45.0,
         "ITERATIONS":5000,
         "DEPTH":8,
         "FILE":"teapot_cloud",
-        "EYE":[0.0,0.05,1.45],
+        "EYE":[0.0,0.05,1.5],
         "LOOKAT":[0.0,0.05,0.0],
         "UP":[0.0,1.0,0.0]
     },
@@ -21,7 +21,7 @@
     "Background":
     {
         "TYPE":"skybox",
-        "PATH":"../scenes/environment/Newport_Loft_Ref.hdr"
+        "PATH":"../scenes/environment/pine_attic_4k.hdr"
     },
     "Media":
     {

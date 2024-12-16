@@ -486,7 +486,6 @@ __global__ void compute_intersection_bvh_volume_naive(
 					return false;
 				}
 				ray.origin = p;
-				assert((wi.x != 0.0f) || (wi.y != 0.0f) || (wi.z != 0.0f));
 				ray.direction = wi;
 				
 				pathSegment.transport *= phase / pdf;

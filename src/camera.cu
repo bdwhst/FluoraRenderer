@@ -263,6 +263,7 @@ PixelSensor::PixelSensor(const RGBColorSpace* outputSpace, SpectrumPtr sensorIll
     if (sensorIllum)
     {
         //TODO: white balance
+        throw std::runtime_error("Not implemented!");
     }
 }
 
